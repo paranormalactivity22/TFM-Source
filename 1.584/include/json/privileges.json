@@ -1,0 +1,28 @@
+{
+	"privs":{
+		11:"Founder",
+		10:"Admin",
+		9:"Co-Admin",
+		8:"Moderator",
+		7:"MapCrew",
+		6:"FashionSquad",
+		5:"FunCorp",
+		4:"Artist",
+		3:"Arbitre",
+		2:"Sentinel",
+		1:"Player",
+	},
+	"colors":{
+		1:"009C9C",
+		2:"2ecf73",
+		3:"d0a5e3",
+		4:"e6ca8a",
+		5:"e48844",
+		6:"f0a78e",
+		7:"60aeff",
+		8:"BABD2F",
+		9:"EA1C50",
+		10:"EA1C50",
+		11:"EA1C50",
+	}
+}
