@@ -1,8 +1,8 @@
 #coding: utf-8
-import re, sys, json, os, base64, hashlib, time, random, traceback
+import re, sys, json, os, base64, hashlib, time, random, traceback, asyncio
 """
 9 Admin, 8 Mod, 7 Arb, 6 MC, 5 FC, 4 LC, 3 - FS, 2 Sentinel, 1 PPL
-Commands: /relation, /harddel, /sondage, /arb, /resign
+Commands: /relation, /arb, /resign
 """
 # Modules
 from time import gmtime, strftime
@@ -20,7 +20,7 @@ class Commands:
         self.server = client.server
         self.Cursor = client.Cursor
         self.currentArgsCount = 0
-        self.owners = ["Chatta"]
+        self.owners = ["Chatta#7646"]
 
     def requireTribe(self, canUse=False, tribePerm = 8):
         if (not(not self.client.tribeName == "" and self.client.room.isTribeHouse and tribePerm != -1 and self.client.tribeRanks[self.client.tribeRank].split("|")[2].split(",") [tribePerm] == "1")):
@@ -42,7 +42,7 @@ class Commands:
         else:
             return True
     
-    def parseCommand(self, command):                
+    async def parseCommand(self, command):                
         values = command.split(" ")
         command = values[0].lower()
         args = values[1:]
@@ -52,9 +52,7 @@ class Commands:
         self.Cursor.execute("insert into commandlog values (%s, %s, %s)", [Utils.getTime(), self.client.playerName, command])
         self.client.sendServerMessageAdmin("<J>[%s]</J> <BV>%s</BV> used command ----> <CH2>%s</CH2>" %(Utils.getTime(), self.client.playerName, command))
 # Player Commands
-        try:
-            if command in self.client.room.blacklistcommands: return
-            
+        try:            
             if command in ["profile", "profil"]:
                 if self.client.privLevel >= 1:
                     self.client.sendProfile(Utils.parsePlayerName(args[0]) if len(args) >= 1 else self.client.playerName)
@@ -136,14 +134,6 @@ class Commands:
                             password = args[0]
                             self.client.room.roomPassword = password
                             self.client.sendLangueMessage("", "$Mot_De_Passe : %s" %(password))
-
-            elif command in ["lb"]:
-                if self.client.room.isSpeedRace and self.client.privLevel >= 1:
-                    self.client.sendLeaderBoard()
-
-            elif command in ["ds"]:
-                if self.client.room.isDeathmatch and self.client.privLevel >= 1:
-                    self.client.sendDeathBoard()
 
             elif command in ["title", "titulo", "titre"]:
                 if self.client.privLevel >= 1:
@@ -252,7 +242,7 @@ class Commands:
                         self.client.room.isSnowing = True
 
             elif command in ["playmusic", "musique", "music"]:
-                if self.client.privLevel >= 1 and self.client.room.isTribeHouse:
+                if (self.client.privLevel >= 1 and self.client.room.isTribeHouse) or self.client.privLevel >= 9:
                     if len(args) == 0:
                         self.client.room.sendAll(Identifiers.old.send.Music, [])
                     else:
@@ -273,6 +263,7 @@ class Commands:
                         if ("LuaCrew" in player.roles and not player.playerName.startswith('*')) or player.isLuaCrew:
                             LuaCrews += "<font color='#79bbac'>• ["+str(player.room.name)[:2]+"] "+str(player.playerName)+" : "+str(player.room.name)+" </font><br>"
                     if LuaCrews != "":
+                        LuaCrews = LuaCrews.rstrip("\n")
                         self.client.sendMessage(LuaCrews)
                     else:
                         self.client.sendMessage("<V>[•]</V> Don't have any online Lua Crews at moment.")
@@ -497,79 +488,6 @@ class Commands:
                     else:
                         self.client.sendMessage("<V>[•]</V> FunCorp commands only work when the room is in FunCorp mode.")
 
-            elif command in ["image"]:
-                if (self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName.lower() or self.client.isFuncorpPlayer == True) and self.requireArguments(4):
-                    if self.client.room.isFuncorp:
-                        imageName = args[0]
-                        target = Utils.parsePlayerName(args[1])
-                        xPosition = int(args[2]) if args[2].isdigit() else 0
-                        yPosition = int(args[3]) if args[3].isdigit() else 0
-
-                        if target.lower() in ["$all", "%all"]:
-                            for player in self.client.room.clientsvalues():
-                                self.client.room.addImage(imageName, target[0] + player.playerName, xPosition, yPosition, "")
-                        else:
-                            self.client.room.addImage(imageName, target, xPosition, yPosition, "")
-                    else:
-                        self.client.sendMessage("<V>[•]</V> FunCorp commands only work when the room is in FunCorp mode.")
-
-            elif command in ["changepoke"]:
-                if(self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName.lower() or self.client.isFuncorpPlayer == True) and self.requireArguments(2):
-                    if self.client.room.isFuncorp:
-                        playerName = Utils.parsePlayerName(args[0])
-                        player = self.server.players.get(playerName)
-                        skins = {0: '1534bfe985e.png', 1: '1507b2e4abb.png', 2: '1507bca2275.png', 3: '1507be4b53c.png', 4: '157f845d5fa.png', 5: '1507bc62345.png', 6: '1507bc98358.png', 7: '157edce286a.png', 8: '157f844c999.png', 9: '157de248597.png', 10: '1507b944d89.png', 11: '1507bcaf32c.png', 12: '1507be41e49.png', 13: '1507bbe8fe3.png', 14: '1507b8952d3.png', 15: '1507b9e3cb6.png', 16: '1507bcb5d04.png', 17: '1507c03fdcf.png', 18: '1507bee9b88.png', 19: '1507b31213d.png', 20: '1507b4f8b8f.png', 21: '1507bf9015d.png', 22: '1507bbf43bc.png', 23: '1507ba020d2.png', 24: '1507b540b04.png', 25: '157d3be98bd.png', 26: '1507b75279e.png', 27: '1507b921391.png', 28: '1507ba14321.png', 29: '1507b8eb323.png', 30: '1507bf3b131.png', 31: '1507ba11258.png', 32: '1507b8c6e2e.png', 33: '1507b9ea1b4.png', 34: '1507ba08166.png', 35: '1507b9bb220.png', 36: '1507b2f1946.png', 37: '1507b31ae1f.png', 38: '1507b8ab799.png', 39: '1507b92a559.png', 40: '1507b846ea8.png', 41: '1507bd2cd60.png', 42: '1507bd7871c.png', 43: '1507c04e123.png', 44: '1507b83316b.png', 45: '1507b593a84.png', 46: '1507becc898.png', 47: '1507befa39f.png', 48: '1507b93ea3d.png', 49: '1507bd14e17.png', 50: '1507bec1bd2.png'}
-                        number = float(args[1])
-                        if args[1] == "off":
-                            self.client.sendMessage("<V>[•]</V> All players back to normal size.")
-                            skin = skins[int(number)]
-                            p = ByteArray()
-                            p.writeInt(0)
-                            p.writeUTF(skin)
-                            p.writeByte(3)
-                            p.writeInt(player.playerCode)
-                            p.writeShort(-30)
-                            p.writeShort(-35)
-                            self.client.room.sendAll([29, 19], p.toByteArray())
-                            self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(float(1)).writeBoolean(False).toByteArray())
-                        elif number >= 0:
-                            if playerName == "*":
-                                for player in self.client.room.clients.values():
-                                    skins = {0: '1534bfe985e.png', 1: '1507b2e4abb.png', 2: '1507bca2275.png', 3: '1507be4b53c.png', 4: '157f845d5fa.png', 5: '1507bc62345.png', 6: '1507bc98358.png', 7: '157edce286a.png', 8: '157f844c999.png', 9: '157de248597.png', 10: '1507b944d89.png', 11: '1507bcaf32c.png', 12: '1507be41e49.png', 13: '1507bbe8fe3.png', 14: '1507b8952d3.png', 15: '1507b9e3cb6.png', 16: '1507bcb5d04.png', 17: '1507c03fdcf.png', 18: '1507bee9b88.png', 19: '1507b31213d.png', 20: '1507b4f8b8f.png', 21: '1507bf9015d.png', 22: '1507bbf43bc.png', 23: '1507ba020d2.png', 24: '1507b540b04.png', 25: '157d3be98bd.png', 26: '1507b75279e.png', 27: '1507b921391.png', 28: '1507ba14321.png', 29: '1507b8eb323.png', 30: '1507bf3b131.png', 31: '1507ba11258.png', 32: '1507b8c6e2e.png', 33: '1507b9ea1b4.png', 34: '1507ba08166.png', 35: '1507b9bb220.png', 36: '1507b2f1946.png', 37: '1507b31ae1f.png', 38: '1507b8ab799.png', 39: '1507b92a559.png', 40: '1507b846ea8.png', 41: '1507bd2cd60.png', 42: '1507bd7871c.png', 43: '1507c04e123.png', 44: '1507b83316b.png', 45: '1507b593a84.png', 46: '1507becc898.png', 47: '1507befa39f.png', 48: '1507b93ea3d.png', 49: '1507bd14e17.png', 50: '1507bec1bd2.png'}
-                                    number = args[1]
-                                    
-                                    if int(number) in skins:
-                                        #self.client.useAnime += 1
-                                        skin = skins[int(number)]
-                                        p = ByteArray()
-                                        p.writeInt(0)
-                                        p.writeUTF(skin)
-                                        p.writeByte(3)
-                                        p.writeInt(player.playerCode)
-                                        p.writeShort(-30)
-                                        p.writeShort(-35)
-                                        self.client.room.sendAll([29, 19], p.toByteArray())
-##                                        self.client.sendMessage("All players skin: " + str(skin) + ".")
-                                    #self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(int(self.client.playerSize * 100)).writeBoolean(False).toByteArray())
-                            else:
-                                player = self.server.players.get(playerName)
-                                if player != None:
-                                    skins = {0: '1534bfe985e.png', 1: '1507b2e4abb.png', 2: '1507bca2275.png', 3: '1507be4b53c.png', 4: '157f845d5fa.png', 5: '1507bc62345.png', 6: '1507bc98358.png', 7: '157edce286a.png', 8: '157f844c999.png', 9: '157de248597.png', 10: '1507b944d89.png', 11: '1507bcaf32c.png', 12: '1507be41e49.png', 13: '1507bbe8fe3.png', 14: '1507b8952d3.png', 15: '1507b9e3cb6.png', 16: '1507bcb5d04.png', 17: '1507c03fdcf.png', 18: '1507bee9b88.png', 19: '1507b31213d.png', 20: '1507b4f8b8f.png', 21: '1507bf9015d.png', 22: '1507bbf43bc.png', 23: '1507ba020d2.png', 24: '1507b540b04.png', 25: '157d3be98bd.png', 26: '1507b75279e.png', 27: '1507b921391.png', 28: '1507ba14321.png', 29: '1507b8eb323.png', 30: '1507bf3b131.png', 31: '1507ba11258.png', 32: '1507b8c6e2e.png', 33: '1507b9ea1b4.png', 34: '1507ba08166.png', 35: '1507b9bb220.png', 36: '1507b2f1946.png', 37: '1507b31ae1f.png', 38: '1507b8ab799.png', 39: '1507b92a559.png', 40: '1507b846ea8.png', 41: '1507bd2cd60.png', 42: '1507bd7871c.png', 43: '1507c04e123.png', 44: '1507b83316b.png', 45: '1507b593a84.png', 46: '1507becc898.png', 47: '1507befa39f.png', 48: '1507b93ea3d.png', 49: '1507bd14e17.png', 50: '1507bec1bd2.png'}
-                                    number = args[1]
-                                    if int(number) in skins:
-                                        #self.client.useAnime += 1
-                                        skin = skins[int(number)]
-                                        p = ByteArray()
-                                        p.writeInt(0)
-                                        p.writeUTF(skin)
-                                        p.writeByte(3)
-                                        p.writeInt(player.playerCode)
-                                        p.writeShort(-30)
-                                        p.writeShort(-35)
-                                        self.client.room.sendAll([29, 19], p.toByteArray())
-                    else:
-                        self.client.sendMessage("<V>[•]</V> FunCorp commands only work when the room is in FunCorp mode.")
-
 
 # MapCrew Commands:
             elif command in ["lsmc"]:
@@ -701,7 +619,7 @@ class Commands:
                         if rate == "Nan": rate = "0"
                         self.client.sendMessage("[•] <V>"+str(self.client.room.mapName)+"<BL> - <V>@"+str(self.client.room.mapCode)+"<BL> - <V>"+str(totalVotes)+"<BL> - <V>"+str(rate)+"%<BL> - <V>P"+str(self.client.room.mapPerma)+"<BL>.")
 
-            elif command in ["np", "npp"]: ##### UNFINISHED
+            elif command in ["np", "npp"]: ########
                 if (self.client.privLevel >= 5 or self.client.room.roomName == "*strm_" + self.client.playerName.lower() or self.client.isMapCrew == True) or self.client.room.isTribeHouse:
                     if len(args) == 0:
                         self.client.room.mapChange()
@@ -750,7 +668,7 @@ class Commands:
                     self.client.sendLogMessage(self.client.sendModerationCommands())
                 
             elif command in ["lsarb"]:
-                if self.client.privLevel >= 7:
+                if self.client.privLevel >= 7 or self.client.isArbitre:
                     Arbitres = ""
                     self.Cursor.execute("select Username from Users where PrivLevel = %s", [7])
                     r = self.Cursor.fetchall()
@@ -758,7 +676,11 @@ class Commands:
                         player = self.server.players.get(rs[0])
                         if player != None:
                             Arbitres = "<font color='#B993CA>• ["+str(player.room.name)[:2]+"] "+str(player.playerName)+" : "+str(player.room.name)+" </font>"
-                    self.client.sendMessage(Arbitres)
+                    if Arbitres != "":
+                        Arbitres = Arbitres.rstrip("\n")
+                        self.client.sendMessage(Arbitres)
+                    else:
+                        self.client.sendMessage("<V>[•]</V> Don't have any online Arbitres at moment.")
 
             elif command in ["hide"]:
                 if self.client.privLevel >= 7:
@@ -844,7 +766,7 @@ class Commands:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
                     self.client.openChatLog(Utils.parsePlayerName(args[0]))
 
-            elif command in ["banhack"]: ##### UNFINISHED
+            elif command in ["banhack"]: ########
                 if self.client.privLevel >= 7 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
                     player = self.server.players.get(playerName)
@@ -857,7 +779,7 @@ class Commands:
                     else:
                         self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
                    
-            elif command in ["ibanhack"]: ##### UNFINISHED
+            elif command in ["ibanhack"]: ########
                 if self.client.privLevel >= 7 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
                     player = self.server.players.get(playerName)
@@ -917,10 +839,10 @@ class Commands:
 
             elif command in ["l"]:
                 if self.client.privLevel >= 7:
-                    playerName = self.client.playerName if len(args) is 0 else "" if "." in args[0] else Utils.parsePlayerName(args[0])
+                    playerName = self.client.playerName if len(args) == 0 else "" if "." in args[0] else Utils.parsePlayerName(args[0])
                     ip = args[0] if len(args) != 0 and "." in args[0] else ""
                     if playerName != "":
-                        self.Cursor.execute("select IP, Time, Country, ConnectionID from LoginLogs where Username = %s", [playerName])
+                        self.Cursor.execute("select DISTINCT IP, Time, Country, ConnectionID from LoginLogs where Username = %s", [playerName])
                         r = self.Cursor.fetchall()
                         message = "<p align='center'>Connection logs for player: <BL>"+playerName+"</BL>\n</p>"
                         for rs in r:
@@ -928,7 +850,7 @@ class Commands:
                         self.client.sendLogMessage(message)
 
                     elif ip != "":
-                        self.Cursor.execute("select Username, Time, Country, ConnectionID from LoginLogs where IP = %s", [ip])
+                        self.Cursor.execute("select DISTINCT Username, Time, Country, ConnectionID from LoginLogs where IP = %s", [ip])
                         r = self.Cursor.fetchall()
                         message = "<p align='center'>Connection logs for ip: <V>"+ip+"</V>\n</p>"
                         for rs in r:
@@ -1167,8 +1089,6 @@ class Commands:
                         message = "<p align='center'><N>Sanction Logs for <V>"+playerName+"</V></N>\n</p><p align='left'>Currently running sanctions: </p><br>"
                         self.Cursor.execute("select * from bmlog where Name = %s order by Timestamp desc limit 0, 200", [playerName])
                         for rs in self.Cursor.fetchall():
-                            #if 'h' in timestamp:
-                                #timestamp.replace('h', '')
                             name,state,timestamp,modName,time,reason = rs[0],rs[1],rs[2],rs[3],rs[4],rs[5]
                             fromtime = str(datetime.fromtimestamp(float(int(timestamp))))
                             ip = self.client.TFMIP(player.ipAddress)
@@ -1290,11 +1210,11 @@ class Commands:
                         result += "\n<J>Total players:</J> <R>%s</R>" %(len(self.server.players))
                         self.client.sendLogMessage(result)
 
-            elif command in ["relation"]:
+            elif command in ["relation"]: ########
                 if self.client.privLevel >= 7 and self.requireArguments(1):
                     playerName = args[0]
                     player = self.server.players.get(playerName)
-                    if True:
+                    if player != None:
                         r1 = []
                         displayed = []
                         List = "<V>[•]</V> The player <BV>"+str(playerName)+"</BV> has the following relations:"
@@ -1330,7 +1250,7 @@ class Commands:
 
                         self.client.sendMessage(List)
                    
-            elif command in ["infotribu"]:
+            elif command in ["infotribu"]: ########
                 if self.client.privLevel >= 7:
                     if len(args) >= 1:
                         name = args[0]
@@ -1369,43 +1289,9 @@ class Commands:
                     else:
                         self.client.sendMessage(f"<V>[•]</V> The community <J>{commu}</J> is invalid.")
 
-            elif command in ["lsbulle"]:
+            elif command in ["creator"]:
                 if self.client.privLevel >= 7:
-                    bulle1 = self.client.TotalPlayersCommunity("EN") + self.client.TotalPlayersCommunity("AR") + self.client.TotalPlayersCommunity("LT")
-                    bulle1ping = self.client.TotalPlayersPingCommunity("EN") + self.client.TotalPlayersPingCommunity("AR") + self.client.TotalPlayersPingCommunity("LT")
-                    bulle2 = self.client.TotalPlayersCommunity("FR") + self.client.TotalPlayersCommunity("RO") + self.client.TotalPlayersCommunity("FI")
-                    bulle2ping = self.client.TotalPlayersPingCommunity("FR") + self.client.TotalPlayersPingCommunity("RO") + self.client.TotalPlayersPingCommunity("FI")
-                    bulle3 = self.client.TotalPlayersCommunity("RU") + self.client.TotalPlayersCommunity("IT") + self.client.TotalPlayersCommunity("CH") + self.client.TotalPlayersCommunity("SK")
-                    bulle3ping = self.client.TotalPlayersPingCommunity("RU") + self.client.TotalPlayersPingCommunity("IT") + self.client.TotalPlayersPingCommunity("CH") + self.client.TotalPlayersPingCommunity("SK")
-                    bulle4 = self.client.TotalPlayersCommunity("BR") + self.client.TotalPlayersCommunity("LV")
-                    bulle4ping = self.client.TotalPlayersPingCommunity("BR") + self.client.TotalPlayersPingCommunity("LV")
-                    bulle5 = self.client.TotalPlayersCommunity("ES") + self.client.TotalPlayersCommunity("E2") + self.client.TotalPlayersCommunity("BG")
-                    bulle5ping = self.client.TotalPlayersPingCommunity("ES") + self.client.TotalPlayersPingCommunity("E2") + self.client.TotalPlayersPingCommunity("BG")
-                    bulle6 = self.client.TotalPlayersCommunity("HE") + self.client.TotalPlayersCommunity("HR") + self.client.TotalPlayersCommunity("PH") + self.client.TotalPlayersCommunity("CN")
-                    bulle6ping = self.client.TotalPlayersPingCommunity("HE") + self.client.TotalPlayersPingCommunity("HR") + self.client.TotalPlayersPingCommunity("PH") + self.client.TotalPlayersPingCommunity("CN")
-                    bulle7 = self.client.TotalPlayersCommunity("TR") + self.client.TotalPlayersCommunity("HU") + self.client.TotalPlayersCommunity("NL")
-                    bulle7ping = self.client.TotalPlayersPingCommunity("TR") + self.client.TotalPlayersPingCommunity("HU") + self.client.TotalPlayersPingCommunity("NL")
-                    bulle8 = self.client.TotalPlayersCommunity("ET") + self.client.TotalPlayersCommunity("DE") + self.client.TotalPlayersCommunity("ID") + self.client.TotalPlayersCommunity("VK")
-                    bulle8ping = self.client.TotalPlayersPingCommunity("ET") + self.client.TotalPlayersPingCommunity("DE") + self.client.TotalPlayersPingCommunity("ID") + self.client.TotalPlayersPingCommunity("VK")
-                    bulle9 = self.client.TotalPlayersCommunity("PL") + self.client.TotalPlayersCommunity("JP") + self.client.TotalPlayersCommunity("CZ")
-                    bulle9ping = self.client.TotalPlayersPingCommunity("PL") + self.client.TotalPlayersPingCommunity("JP") + self.client.TotalPlayersPingCommunity("CZ")
-                    self.client.sendMessage("<V>[•]</V> [bulle1] "+str(bulle1)+" / "+str(bulle1ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle2] "+str(bulle2)+" / "+str(bulle2ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle3] "+str(bulle3)+" / "+str(bulle3ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle4] "+str(bulle4)+" / "+str(bulle4ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle5] "+str(bulle5)+" / "+str(bulle5ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle6] "+str(bulle6)+" / "+str(bulle6ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle7] "+str(bulle7)+" / "+str(bulle7ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle8] "+str(bulle8)+" / "+str(bulle8ping)+"ms</V>")
-                    self.client.sendMessage("<V>[•]</V> [bulle9] "+str(bulle9)+" / "+str(bulle9ping)+"ms</V>")
-
-            elif command in ["creator"]: ###### NOT WORKING
-                if self.client.privLevel >= 7:
-                    creator = ""
-                    for player in [*self.client.room.clients.values()]:
-                        creator = player.playerName
-                        break
-                    self.client.sendMessage("<V>[•]</V> Room [<J>"+self.client.room.name+"</J>]'s creator: <BV>"+creator+"</BV>")
+                    self.client.sendMessage("<V>[•]</V> Room [<J>"+self.client.room.name+"</J>]'s creator: <BV>"+self.client.room.roomCreator+"</BV>")
 
 # Moderator Commands
 
@@ -1418,7 +1304,11 @@ class Commands:
                         player = self.server.players.get(rs[0])
                         if player != None:
                             Moderateurs = "<font color='#C565FE'>• ["+str(player.room.name)[:2]+"] "+str(player.playerName)+" : "+str(player.room.name)+" </font>"
-                    self.client.sendMessage(Moderateurs)
+                    if Moderateurs != "":
+                        Moderateurs = Moderateurs.rstrip("\n")
+                        self.client.sendMessage(Moderateurs)
+                    else:
+                        self.client.sendMessage("<V>[•]</V> Don't have any online Moderators at moment.")
 
             elif command in ["mm"]:
                 if self.client.privLevel >= 8:
@@ -1468,20 +1358,19 @@ class Commands:
                     except:
                         pass
 
-            elif command in ["arb"]: ###### NOT WORKING
+            elif command in ["arb"]: ########
                 if self.client.privLevel >= 8 and self.requireArguments(1):
                     player = self.server.players.get(Utils.parsePlayerName(args[0]))
                     if player != None:
                         if self.server.getPlayerPrivlevel(player.playerName) == 7:
                             self.Cursor.execute("UPDATE users SET PrivLevel = 1 WHERE Username = '%s' " % (player.playerName))
-                            player.room.removeClient(player)
-                            player.transport.close()
-                            self.client.sendServerMessage("<V>[•]</V> "+player.playerName+ " is not arbitre / moderator anymore.")
+                            player.updateDatabase()
+                            self.client.sendServerMessage(player.playerName+" is not arbitre / moderator anymore.")
+                            
                         else:
                             self.Cursor.execute("UPDATE users SET PrivLevel = 7 WHERE Username = '%s' " % (player.playerName))
-                            player.room.removeClient(player)
-                            player.transport.close()
-                            self.client.sendServerMessage("<V>[•]</v> New arbitre : "+player.playerName)
+                            player.updateDatabase()
+                            self.client.sendServerMessage("New arbitre : "+player.playerName)
 
             elif command in ["max"]:
                 if self.client.privLevel >= 8:
@@ -1593,12 +1482,6 @@ class Commands:
                     if player != None:
                         self.client.room.sendAll(Identifiers.send.Add_Frame, ByteArray().writeInt(player.playerCode).writeUTF(frame).writeInt(xPosition).writeInt(yPosition).toByteArray())
 
-            elif command in ["tns"]:
-                if self.client.privLevel >= 9:
-                    for player in self.server.players.values():
-                        player.shopCheeses += 20;
-                        player.shopFraises += 20;  
-
             elif command in ["resetprofile"]: ##### NOT WORKING
                 if self.client.privLevel >= 9 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
@@ -1612,18 +1495,6 @@ class Commands:
                         player.updateDatabase()
                         player.room.removeClient(player)
                         player.transport.close()
-                    else:
-                        self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
-
-            elif command in ["playersql"]:
-                if self.client.privLevel >= 9 and self.requireArguments(3):
-                    playerName = Utils.parsePlayerName(args[0])
-                    param = args[1]
-                    value = args[2]
-                    player = self.server.players.get(playerName)
-                    if player != None:
-                        self.Cursor.execute("UPDATE users SET %s = %s WHERE Username = '%s' " % (param, value, player.playerName))
-                        self.client.sendServerMessage("%s Changed the database for player <V>%s</V> (<T>%s</T> -> <T>%s</T>)." %(self.client.playerName, player.playerName, param, value))
                     else:
                         self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
 
@@ -1676,11 +1547,7 @@ class Commands:
                 if self.client.playerName in self.owners:
                     self.server.sendServerRestart(0, 0)
                     
-            elif command in ["freboot"]:
-                if self.client.playerName in self.owners:
-                    self.server.sendServerRestart(5, 10)
-
-            elif command in ["clearlog"]:
+            elif command in ["clearlogs"]:
                 if self.client.playerName in self.owners and self.requireArguments(1):
                     if args[0] == "reports":
                         self.server.reports = {}
@@ -1745,56 +1612,22 @@ class Commands:
                     else:
                         self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
 
-            elif command in ["activatehack"]:
-                if self.client.playerName in self.owners and self.requireArgumentsUpper(1):
-                    if args[0] == 'teleport':
-                        self.client.isTeleport = not self.client.isTeleport
-                        self.client.room.bindMouse(self.client.playerName, self.client.isTeleport)
-                        self.client.sendMessage("<CE>Teleport -></CE> " + ("<PS>ON</PS>" if self.client.isTeleport else "<T>OFF"))
-                    elif args[0] == 'fly':
-                        self.client.isFly = not self.client.isFly
-                        self.client.room.bindKeyBoard(self.client.playerName, 32, False, self.client.isFly)
-                        self.client.sendMessage("<CE>Fly -></CE> " + ("<PS>ON</PS>" if self.client.isFly else "<T>OFF"))
-                    elif args[0] == 'speed':
-                        self.client.isSpeed = not self.client.isSpeed
-                        self.client.room.bindKeyBoard(self.client.playerName, 32, False, self.client.isSpeed)
-                        self.client.sendMessage("<CE>Speed -></CE> " + ("<PS>ON</PS>" if self.client.isSpeed else "<T>OFF"))
-                    elif args[0] == 'cat':
-                        self.client.room.sendAll([5, 43], ByteArray().writeInt(self.client.playerCode).writeByte(1).toByteArray())                  
-                    elif args[0] == 'gravity':
-                        print('g')
-                        gravity = int(args[1])
-                        self.client.room.sendAll(Identifiers.old.send.Gravity, [0, gravity])
-                        self.client.sendMessage("<CE>Gravity -></CE> <PS>ON</PS> ("+str(gravity)+")")
-                    elif args[0] == 'wind':
-                        print('g')
-                        wind = int(args[1])
-                        self.client.room.sendAll(Identifiers.old.send.Gravity, [wind, 8])
-                        self.client.sendMessage("<CE>Wind -></CE> <PS>ON</PS> ("+str(wind)+")")
-
             elif command in ["reset"]:
                 if self.client.playerName in self.owners and self.requireArguments(1):
                     if args[0] == "fastracing":
                         self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ?", [0, "", 0])
-                        self.server.fastRacingRekorlar = {"recordmap":{},"siraliKayitlar":[],"kayitlar":{}}
                         self.client.sendServerMessageAdmin("All records of fastracing was deleted by %s."%(self.client.playerName))
                     elif args[0] == "deathcounts":
                         self.Cursor.execute("update Users set deathCount = %s", [0])
                         self.client.sendServerMessageAdmin("<V>[•]</V> All deathcounts was reset by %s."%(self.client.playerName)) 
 
-            elif command in ["reload"]: ######## NOT WORK
+            elif command in ["reload"]:
                 if self.client.playerName in self.owners:
                     try:
-                        self.client.reloadAllModules()
+                        self.server.reloadServer()
                         self.client.sendMessage("<V>[•]</V> Successfull reloaded all modules.")
                     except:
                         self.client.sendMessage("<V>[•]</V> Failed reload all modules.")
-
-            elif command in ["eventdisco"]:
-                if self.client.playerName in self.owners:
-                    for client in self.client.room.clients.values():
-                        client.discoReady()
-                        client.discoMessage()
                         
             elif command in ["changepassword"]: #####
                 #if self.client.playerName in self.owners:
@@ -1868,8 +1701,6 @@ class Commands:
         message += "<J>/linkmice</J><VP>[playerName|*] [off]</VP>  - <BL> Temporarily links players.\n"
         message += "<J>/meep</J> <VP>[playerName|*] [off]</VP> - <BL> 	Give meep to players.\n"
         message += "<J>/transformation</J> <VP>[playerName|*] [off]</VP> - <BL> Temporarily gives the ability to transform.\n"
-        message += "<J>/image</J> <VP>[id] [name] [xPos] [yPos]</VP> - <BL> Temporarily replace player with image.\n"
-        message += "<J>/changepoke</J> <VP>[playerName|*] [id|off]</VP> - <BL> Temporarily replace player with pokemon image.\n"
         return message
         
     def FunCorpMemberCommands(self):
@@ -1884,8 +1715,6 @@ class Commands:
         message += "<J>/roomevent</J> <VP>[on|off]</VP> - <BL> Highlights the current room in the room list.\n"
         message += "<J>/lsfc</J> - <BL> List of online funcorps.\n"
         message += "<J>/transformation</J> <VP>[playerName|*] [off]</VP> - <BL> Temporarily gives the ability to transform.\n"
-        message += "<J>/image</J> <VP>[id] [name] [xPos] [yPos]</VP> - <BL> Temporarily replace player with image.\n"
         message += "<J>/tropplein</J> <VP>[Number] [off]</VP> - <BL> Setting a limit for the number of players in a room.\n"
         message += "<J>/playmusic</J> <VP>[MP3_URL]</VP> - <BL> Start playing music in the room.\n"
-        message += "<J>/changepoke</J> <VP>[playerName|*] [id|off]</VP> - <BL> Temporarily replace player with pokemon image.\n"
         return message

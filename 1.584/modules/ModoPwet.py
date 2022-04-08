@@ -10,7 +10,6 @@ class ModoPwet:
         self.client = player
         self.server = player.server
         self.isReportedType = ""
-        self.isReported = False
 
     def checkReport(self, array, playerName):
         return playerName in array
@@ -62,13 +61,6 @@ class ModoPwet:
         for player in self.server.players.values():
             if player.isModoPwet and player.privLevel >= 7:
                 player.modoPwet.openModoPwet(True)
-
-    def getPlayerNotificationStatus(self, playerName):
-        player = self.server.players.get(playerName)
-        if player != None:
-            return player.isReported
-        else:
-            return False
 
     def getPlayerRoomName(self, playerName, type):
         player = self.server.players.get(playerName)
@@ -150,20 +142,19 @@ class ModoPwet:
             else:
                 self.client.sendPacket(Identifiers.send.Modopwet_Open, 0)
                 reports,bannedList,deletedList,disconnectList = self.sortReports(self.server.reports,sortBy),{},{},[]
-                sayi = 0
+                cnt = 0
                 p = ByteArray()  
                 for i in reports:
                     playerName = i[0]
                     v = self.server.reports[playerName]
                     if self.client.modoPwetLangue == 'ALL' or v["language"] == self.client.modoPwetLangue:
                         player = self.server.players.get(playerName)
-                        TimePlayed = math.floor(player.playerTime/3600) if player else 0
-                        playerNameRoom = player.roomName if player else "0"
-                        sayi += 1
+                        TimePlayed = math.floor(player.playerTime/3600) if player != None else 0
+                        playerNameRoom = player.roomName if player != None else "0"
+                        cnt += 1
                         self.client.lastReportID += 1
-                        if sayi >= 255:
-                            break  
-                        p.writeByte(sayi)
+                        if cnt >= 255: break  
+                        p.writeByte(cnt)
                         p.writeShort(self.client.lastReportID)
                         p.writeUTF(v["language"])
                         p.writeUTF(playerName)
@@ -212,21 +203,12 @@ class ModoPwet:
 
     def changeReportStatusDisconnect(self, playerName):
         self.client.sendPacket(Identifiers.send.Modopwet_Disconnected, ByteArray().writeUTF(playerName).toByteArray())
-        player = self.server.players.get(playerName)
-        if player != None:
-            player.isReported = False
 
     def changeReportStatusDeleted(self, playerName, deletedby):
         self.client.sendPacket(Identifiers.send.Modopwet_Deleted, ByteArray().writeUTF(playerName).writeUTF(deletedby).toByteArray())
-        player = self.server.players.get(playerName)
-        if player != None:
-            player.isReported = False
         
     def changeReportStatusBanned(self, playerName, banhours, banreason, bannedby):
         self.client.sendPacket(Identifiers.send.Modopwet_Banned, ByteArray().writeUTF(playerName).writeUTF(bannedby).writeInt(int(banhours)).writeUTF(banreason).toByteArray())
-        player = self.server.players.get(playerName)
-        if player != None:
-            player.isReported = False
 
     def openChatLog(self, playerName):
         if playerName in self.server.chatMessages:

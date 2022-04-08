@@ -1,39 +1,95 @@
 #coding: utf-8
-import time, json, re
-
+import time, json, re, asyncio
 from lupa import LuaRuntime
-
 from utils import Utils
 from ByteArray import ByteArray
 from Identifiers import Identifiers
-
-import asyncio
 
 class Lua:
     def __init__(self, room, server):
         # Others
         self.room = room
         self.server = server
-        self.maxData = 128000
         # NoneType
         self.owner = None
         self.runtime = None
         # String
         self.name = ""
         self.script = ""
+        # Boolean
         self.roomFix = False
+        self.running = True
         # Dict
         self.RoomObjects = {}
+        self.loops = {}
         #List
         self.HiddenCommands = []
+        self.roomAreas = []
+        self.imagesadd = []
+        self.roomPopups = []
         # Integer
         self.LastRoomObjectID = 2000
+        self.lastloopid = 1
+        self.maxData = 128000
+    
+    def FixUnicodeError(self, text=u""):
+        if isinstance(text, bytes):
+            text = text.decode()
+        return text
+
+    def Permissions(self):
+        if self.owner is None: 
+            return True
+        if self.owner.isLuaCrew or self.owner.privLevel == 9:
+            return True
+        return False
     
     def Forbidden(self, function):
         self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] <BL>%s</BL>" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str("You're not allowed to use the function "+str(function))))
 
+    def htmlfix(self, text):
+        if "<a" in text:
+            if not "</a>" in text:
+                text = text + "</a>"
+        if "<p" in text:
+            if not "</p>" in text:
+                text = text + "</p>"
+        if "<font" in text:
+            if not "</font>" in text:
+                text = text + "</font>"
+        return text
+
+    def createLoop(self, _id, _time, callback):
+        if not self.running: return
+        self.server.loop.call_later(0, callback)
+        d = self.server.loop.call_later(_time, lambda: self.createLoop(_id, _time, callback))
+        if _id in self.loops:
+            self.loops[_id] = d
+        else:
+            return d
+
+    def tableForeach(self, array, callback):
+        for key, value in array.items():
+            callback(key, value)
+               
+    def sendLuaMessage(self, *args):
+        message = ""
+        for x in args:
+            message += (self.globals.tostring(x) if self.globals.type(x) != "userdata" else "userdata") + ("  " if len(args)>1 else "")
+        if message != "" and not self.owner is None:
+            self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] %s" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str(message)))
+
+    def EventLoop(self):
+        if not self.runtime is None:
+            self.RefreshTFMGet()
+            elapsed = (Utils.getTime() - self.room.gameStartTime) * 1000
+            remaining = ((self.room.roundTime + self.room.addTime) - (Utils.getTime() - self.room.gameStartTime)) * 1000
+            self.emit('Loop', (elapsed if elapsed >= 0 else 0, remaining if remaining >= 0 else 0))
+
+            self.server.addCallLater(0.5, self.EventLoop)
+
     def SetupRuntimeGlobals(self):
-        if self.runtime is None:
+        if self.runtime is None: 
             return
         self.globals = self.runtime.globals()
 
@@ -52,40 +108,115 @@ class Lua:
         self.globals['os']['setlocale'] = None
         self.globals['os']['time'] = lambda: int(time.time() * 1000)
         self.globals['string']['rep'] = lambda t, x: str(t * int(x))
-
         self.globals['print'] = self.sendLuaMessage
 
         self.globals['system'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
-        self.globals['system']['bindKeyBoard'] = self.room.bindKeyBoard
-        self.globals['system']['disableChatCommandDisplay'] = self.disableChatCommandDisplay
-        self.globals['system']['bindMouse'] = self.room.bindMouse
-        self.globals['system']['loadPlayerData'] = self.loadPlayerData
-        self.globals['system']['savePlayerData'] = self.savePlayerData
-        self.globals['system']['newTimer'] = self.newTimer
         self.globals['system']['addBot'] = self.addBot
+        self.globals['system']['bindKeyBoard'] = self.room.bindKeyBoard
+        self.globals['system']['bindMouse'] = self.room.bindMouse
+        self.globals['system']['disableChatCommandDisplay'] = self.disableChatCommandDisplay
+        self.globals['system']['exit'] = self.stopModule
+        self.globals['system']['giveEventGift'] = self.giveEventGift
         self.globals['system']['loadFile'] = self.loadFile
+        self.globals['system']['loadPlayerData'] = self.loadPlayerData
+        self.globals['system']['newTimer'] = self.newTimer
+        self.globals['system']['removeTimer'] = self.removeTimer
         self.globals['system']['saveFile'] = self.saveFile
+        self.globals['system']['savePlayerData'] = self.savePlayerData
 
         self.globals['ui'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
-        self.globals['ui']['showColorPicker'] = self.room.showColorPicker
-        self.globals['ui']['setMapName'] = self.setMapName
-        self.globals['ui']['setShamanName'] = self.setShamanName
-        
+        self.globals['ui']['addLog'] = self.addLog
+        self.globals['ui']['addPopup'] = self.addPopup
         self.globals['ui']['addTextArea'] = self.addTextArea
         self.globals['ui']['removeTextArea'] = self.removeTextArea
+        self.globals['ui']['setMapName'] = self.setMapName
+        self.globals['ui']['setShamanName'] = self.setShamanName
+        self.globals['ui']['showColorPicker'] = self.room.showColorPicker #kkkkkk
         self.globals['ui']['updateTextArea'] = self.updateTextArea
-        self.globals['ui']['addPopup'] = self.addPopup
-        self.globals['ui']['addLog'] = self.addLog
 
         self.globals['tfm'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['enum'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['enum']['shamanObject'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['enum']['emote'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
+        self.globals['tfm']['enum']['bonus'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
+        self.globals['tfm']['enum']['ground'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
+        self.globals['tfm']['enum']['particle'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['exec'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['get'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['get']['misc'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['get']['room'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         
+        self.globals['tfm']['exec']['addBonus'] = self.addBonus
+        self.globals['tfm']['exec']['addConjuration'] = self.addConjuration
+        self.globals['tfm']['exec']['addImage'] = self.addImage #kkkkkk
+        self.globals['tfm']['exec']['addJoint'] = self.addJoint
+        self.globals['tfm']['exec']['addPhysicObject'] = self.room.addPhysicObject
+        self.globals['tfm']['exec']['addShamanObject'] = self.addShamanObject
+        self.globals['tfm']['exec']['addTextArea'] = self.addTextArea
+        self.globals['tfm']['exec']['attachBalloon'] = self.attachBalloon
+        self.globals['tfm']['exec']['changePlayerSize'] = self.changePlayerSize
+        self.globals['tfm']['exec']['chatMessage'] = self.chatMessage
+        self.globals['tfm']['exec']['disableAfkDeath'] = self.disableAfkDeath
+        self.globals['tfm']['exec']['disableAllShamanSkills'] = self.disableAllShamanSkills
+        self.globals['tfm']['exec']['disableAutoNewGame'] = self.disableAutoNewGame
+        self.globals['tfm']['exec']['disableAutoScore'] = self.disableAutoScore
+        self.globals['tfm']['exec']['disableAutoShaman'] = self.disableAutoShaman
+        self.globals['tfm']['exec']['disableAutoTimeLeft'] = self.disableAutoTimeLeft
+        self.globals['tfm']['exec']['displayParticle'] = self.displayParticle
+        self.globals['tfm']['exec']['explosion'] = self.explosion
+        self.globals['tfm']['exec']['freezePlayer'] = self.freezePlayer
+        self.globals['tfm']['exec']['getPlayerSync'] = self.getPlayerSync
+        self.globals['tfm']['exec']['giveCheese'] = self.giveCheese
+        self.globals['tfm']['exec']['giveConsumables'] = self.giveConsumables
+        self.globals['tfm']['exec']['giveMeep'] = self.giveMeep
+        self.globals['tfm']['exec']['giveTransformations'] = self.giveTransformations
+        self.globals['tfm']['exec']['killPlayer'] = self.killPlayer
+        self.globals['tfm']['exec']['linkMice'] = self.linkMice
+        self.globals['tfm']['exec']['lowerSyncDelay'] = self.lowerSyncDelay
+        self.globals['tfm']['exec']['moveCheese'] = self.moveCheese
+        self.globals['tfm']['exec']['moveObject'] = self.moveObject
+        self.globals['tfm']['exec']['movePlayer'] = self.room.movePlayer
+        self.globals['tfm']['exec']['newGame'] = self.newGame
+        self.globals['tfm']['exec']['playEmote'] = self.playEmote
+        self.globals['tfm']['exec']['playerVictory'] = self.playerVictory
+        self.globals['tfm']['exec']['removeBonus'] = self.removeBonus
+        self.globals['tfm']['exec']['removeCheese'] = self.removeCheese
+        self.globals['tfm']['exec']['removeImage'] = self.removeImage #kkkkkk
+        self.globals['tfm']['exec']['removeJoint'] = self.removeJoint
+        self.globals['tfm']['exec']['removeObject'] = self.room.removeObject
+        self.globals['tfm']['exec']['removePhysicObject'] = self.RemovePhysicObject
+        self.globals['tfm']['exec']['removeTextArea'] = self.removeTextArea
+        self.globals['tfm']['exec']['respawnPlayer'] = self.respawnPlayer
+        self.globals['tfm']['exec']['setAutoMapFlipMode'] = self.setAutoMapFlipMode
+        self.globals['tfm']['exec']['setGameTime'] = self.setGameTime
+        self.globals['tfm']['exec']['setNameColor'] = self.setNameColor
+        self.globals['tfm']['exec']['setPlayerScore'] = self.setPlayerScore
+        self.globals['tfm']['exec']['setPlayerSync'] = self.setPlayerSync
+        self.globals['tfm']['exec']['setRoomMaxPlayers'] = self.setRoomMaxPlayers
+        self.globals['tfm']['exec']['setRoomPassword'] = self.setRoomPassword
+        self.globals['tfm']['exec']['setShaman'] = self.setShaman
+        self.globals['tfm']['exec']['setUIMapName'] = self.setMapName
+        self.globals['tfm']['exec']['setUIShamanName'] = self.setShamanName
+        self.globals['tfm']['exec']['setVampirePlayer'] = self.setVampirePlayer #kkkkkk
+        self.globals['tfm']['exec']['setWorldGravity'] = self.setWorldGravity
+        self.globals['tfm']['exec']['snow'] = self.snow
+        self.globals['tfm']['exec']['updateTextArea'] = self.updateTextArea
+
+        self.globals['tfm']['get']['misc']['apiVersion'] = "0.26"
+        self.globals['tfm']['get']['misc']['transformiceVersion'] = self.server.Version
+
+        self.globals['tfm']['get']['room']['objectList'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
+        self.globals['tfm']['get']['room']['xmlMapInfo'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
+        self.globals['tfm']['get']['room']['xmlMapInfo']['permCode'] = self.getPermCode
+        self.globals['tfm']['get']['room']['xmlMapInfo']['author'] = self.getauthor
+        self.globals['tfm']['get']['room']['xmlMapInfo']['mapCode'] = self.getmapCode
+        self.globals['tfm']['get']['room']['xmlMapInfo']['xml'] = self.getxmlmap
+        
+        #self.globals['debug']['disableEventLog'] = self.disableEventLog
+        
+        self.RefreshTFMGet()
+
+    def RefreshTFMGet(self):
         self.globals['tfm']['enum']['shamanObject']['arrow'] = 0
         self.globals['tfm']['enum']['shamanObject']['littleBox'] = 1
         self.globals['tfm']['enum']['shamanObject']['box'] = 2
@@ -154,89 +285,82 @@ class Lua:
         self.globals['tfm']['enum']['emote']['rockpaperscissors_1'] = 26
         self.globals['tfm']['enum']['emote']['rockpaperscissor_2'] = 27
         
-        self.globals['tfm']['exec']['chatMessage'] = self.chatMessage
-        self.globals['tfm']['exec']['playerVictory'] = self.playerVictory
-        self.globals['tfm']['exec']['addConjuration'] = self.addConjuration
-        self.globals['tfm']['exec']['respawnPlayer'] = self.respawnPlayer
-        self.globals['tfm']['exec']['removeCheese'] = self.removeCheese
-        self.globals['tfm']['exec']['giveCheese'] = self.giveCheese
-        self.globals['tfm']['exec']['giveMeep'] = self.giveMeep
-        self.globals['tfm']['exec']['killPlayer'] = self.killPlayer
-        self.globals['tfm']['exec']['displayParticle'] = self.displayParticle
-        self.globals['tfm']['exec']['setGameTime'] = self.setGameTime
-        self.globals['tfm']['exec']['setShaman'] = self.setShaman
-        self.globals['tfm']['exec']['giveTransformations'] = self.giveTransformations
-        self.globals['tfm']['exec']['addShamanObject'] = self.addShamanObject
-        self.globals['tfm']['exec']['removeObject'] = self.room.removeObject
-        self.globals['tfm']['exec']['movePlayer'] = self.room.movePlayer
-        self.globals['tfm']['exec']['newGame'] = self.newGame
-        self.globals['tfm']['exec']['moveCheese'] = self.moveCheese
-        self.globals['tfm']['exec']['addTextArea'] = self.addTextArea
-        self.globals['tfm']['exec']['removeTextArea'] = self.removeTextArea
-        self.globals['tfm']['exec']['updateTextArea'] = self.updateTextArea
-        self.globals['tfm']['exec']['addPopup'] = self.addPopup
-        self.globals['tfm']['exec']['setUIMapName'] = self.setMapName
-        self.globals['tfm']['exec']['setUIShamanName'] = self.setShamanName
-        self.globals['tfm']['exec']['addImage'] = self.addImage
-        self.globals['tfm']['exec']['removeImage'] = self.removeImage
-        self.globals['tfm']['exec']['playEmote'] = self.playEmote
-        self.globals['tfm']['exec']['giveConsumables'] = self.giveConsumables
-        self.globals['tfm']['exec']['setRoomMaxPlayers'] = self.setRoomMaxPlayers
-        self.globals['tfm']['exec']['setRoomPassword'] = self.setRoomPassword
-        self.globals['tfm']['exec']['setNameColor'] = self.room.setNameColor
-        self.globals['tfm']['exec']['setPlayerScore'] = self.setPlayerScore
-        self.globals['tfm']['exec']['addPhysicObject'] = self.room.addPhysicObject
-        self.globals['tfm']['exec']['removePhysicObject'] = self.RemovePhysicObject
-        self.globals['tfm']['exec']['changePlayerSize'] = self.changePlayerSize
-        self.globals['tfm']['exec']['linkMice'] = self.linkMice
-        #self.globals['tfm']['exec']['addJoint'] = self.addJoint
-        self.globals['tfm']['exec']['freezePlayer'] = self.freezePlayer
-        self.globals['tfm']['exec']['lowerSyncDelay'] = self.lowerSyncDelay
-        self.globals['tfm']['exec']['removeJoint'] = self.removeJoint
-        self.globals['tfm']['exec']['disableAfkDeath'] = self.disableAfkDeath
-        self.globals['tfm']['exec']['disableAllShamanSkills'] = self.disableAllShamanSkills
-        self.globals['tfm']['exec']['disableAutoNewGame'] = self.disableAutoNewGame
-        self.globals['tfm']['exec']['disableAutoScore'] = self.disableAutoScore
-        self.globals['tfm']['exec']['disableAutoShaman'] = self.disableAutoShaman
-        self.globals['tfm']['exec']['disableAutoTimeLeft'] = self.disableAutoTimeLeft
-        self.globals['tfm']['exec']['disablePhysicalConsumables'] = self.disablePhysicalConsumables
-        self.globals['tfm']['exec']['disableMortCommand'] = self.disableMortCommand
-        self.globals['tfm']['exec']['snow'] = self.snow
-        self.globals['tfm']['exec']['setVampirePlayer'] = self.setVampirePlayer
-        self.globals['tfm']['exec']['getPlayerSync'] = self.getPlayerSync
-        self.globals['tfm']['exec']['setPlayerSync'] = self.setPlayerSync
-        self.globals['tfm']['exec']['setWorldGravity'] = self.setWorldGravity
-        self.globals['tfm']['exec']['explosion'] = self.explosion
-        self.globals['tfm']['exec']['bindKeyboard'] = self.room.bindKeyBoard
-        self.globals['tfm']['exec']['addBonus'] = self.addBonus
-        self.globals['tfm']['exec']['removeBonus'] = self.removeBonus
-
-        self.globals['tfm']['get']['misc']['apiVersion'] = "0.1"
-        self.globals['tfm']['get']['misc']['transformiceVersion'] = self.server.Version
-
-        self.globals['tfm']['get']['room']['objectList'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
-        self.globals['tfm']['get']['room']['xmlMapInfo'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
-        self.globals['tfm']['get']['room']['xmlMapInfo']['permCode'] = self.getPermCode
-        self.globals['tfm']['get']['room']['xmlMapInfo']['author'] = self.getauthor
-        self.globals['tfm']['get']['room']['xmlMapInfo']['mapCode'] = self.getmapCode
-        self.globals['tfm']['get']['room']['xmlMapInfo']['xml'] = self.getxmlmap
+        self.globals['tfm']['enum']['bonus']['point'] = 0
+        self.globals['tfm']['enum']['bonus']['speed'] = 1
+        self.globals['tfm']['enum']['bonus']['death'] = 2
+        self.globals['tfm']['enum']['bonus']['spring'] = 3
+        self.globals['tfm']['enum']['bonus']['booster'] = 5
+        self.globals['tfm']['enum']['bonus']['electricArc'] = 6
         
-        #self.globals['debug']['disableEventLog'] = self.disableEventLog
+        self.globals['tfm']['enum']['ground']['wood'] = 0
+        self.globals['tfm']['enum']['ground']['ice'] = 1
+        self.globals['tfm']['enum']['ground']['trampoline'] = 2
+        self.globals['tfm']['enum']['ground']['lava'] = 3
+        self.globals['tfm']['enum']['ground']['chocolate'] = 4
+        self.globals['tfm']['enum']['ground']['earth'] = 5
+        self.globals['tfm']['enum']['ground']['grass'] = 6
+        self.globals['tfm']['enum']['ground']['sand'] = 7
+        self.globals['tfm']['enum']['ground']['cloud'] = 8
+        self.globals['tfm']['enum']['ground']['water'] = 9
+        self.globals['tfm']['enum']['ground']['stone'] = 10
+        self.globals['tfm']['enum']['ground']['snow'] = 11
+        self.globals['tfm']['enum']['ground']['rectangle'] = 12
+        self.globals['tfm']['enum']['ground']['circle'] = 13
+        self.globals['tfm']['enum']['ground']['invisible'] = 14
+        self.globals['tfm']['enum']['ground']['web'] = 15
+        self.globals['tfm']['enum']['ground']['yellowGrass'] = 17
+        self.globals['tfm']['enum']['ground']['pinkGrass'] = 18
+        self.globals['tfm']['enum']['ground']['acid'] = 19
         
-        self.RefreshTFMGet()
-
-    def UpdateObjectList(self, olist={}):
-        self.RoomObjects = olist
-
-    def RefreshTFMGet(self):
+        self.globals['tfm']['enum']['particle']['whiteGlitter'] = 0
+        self.globals['tfm']['enum']['particle']['blueGlitter'] = 1
+        self.globals['tfm']['enum']['particle']['orangeGlitter'] = 2
+        self.globals['tfm']['enum']['particle']['cloud'] = 3
+        self.globals['tfm']['enum']['particle']['dullWhiteGlitter'] = 4
+        self.globals['tfm']['enum']['particle']['heart'] = 5
+        self.globals['tfm']['enum']['particle']['bubble'] = 6
+        self.globals['tfm']['enum']['particle']['tealGlitter'] = 9
+        self.globals['tfm']['enum']['particle']['spirit'] = 10
+        self.globals['tfm']['enum']['particle']['yellowGlitter'] = 11
+        self.globals['tfm']['enum']['particle']['ghostSpirit'] = 12
+        self.globals['tfm']['enum']['particle']['redGlitter'] = 13
+        self.globals['tfm']['enum']['particle']['waterBubble'] = 14
+        self.globals['tfm']['enum']['particle']['plus1'] = 15
+        self.globals['tfm']['enum']['particle']['plus10'] = 16
+        self.globals['tfm']['enum']['particle']['plus12'] = 17
+        self.globals['tfm']['enum']['particle']['plus14'] = 18
+        self.globals['tfm']['enum']['particle']['plus16'] = 19
+        self.globals['tfm']['enum']['particle']['meep'] = 20
+        self.globals['tfm']['enum']['particle']['redConfetti'] = 21
+        self.globals['tfm']['enum']['particle']['greenConfetti'] = 22
+        self.globals['tfm']['enum']['particle']['blueConfetti'] = 23
+        self.globals['tfm']['enum']['particle']['yellowConfetti'] = 24
+        self.globals['tfm']['enum']['particle']['diagonalRain'] = 25
+        self.globals['tfm']['enum']['particle']['curlyWind'] = 26
+        self.globals['tfm']['enum']['particle']['wind'] = 27
+        self.globals['tfm']['enum']['particle']['rain'] = 28
+        self.globals['tfm']['enum']['particle']['star'] = 29
+        self.globals['tfm']['enum']['particle']['littleRedHeart'] = 30
+        self.globals['tfm']['enum']['particle']['littlePinkHeart'] = 31
+        self.globals['tfm']['enum']['particle']['daisy'] = 32
+        self.globals['tfm']['enum']['particle']['bell'] = 33
+        self.globals['tfm']['enum']['particle']['egg'] = 34
+        self.globals['tfm']['enum']['particle']['projection'] = 35
+        self.globals['tfm']['enum']['particle']['mouseTeleportation'] = 36
+        self.globals['tfm']['enum']['particle']['shamanTeleportation'] = 37
+        self.globals['tfm']['enum']['particle']['lollipopConfetti'] = 38
+        self.globals['tfm']['enum']['particle']['yellowCandyConfetti'] = 39
+        self.globals['tfm']['enum']['particle']['pinkCandyConfetti'] = 40
+        
         self.globals['tfm']['get']['room']['name'] = self.room.name
         self.globals['tfm']['get']['room']['community'] = self.room.community
+        self.globals['tfm']['get']['room']['language'] = self.room.community
         self.globals['tfm']['get']['room']['currentMap'] = self.room.mapCode
         self.globals['tfm']['get']['room']['maxPlayers'] = self.room.maxPlayers
         self.globals['tfm']['get']['room']['mirroredMap'] = self.room.mapInverted
+        self.globals['tfm']['get']['room']['uniquePlayers'] = len(self.room.clients)
         self.globals['tfm']['get']['room']['passwordProtected'] = self.room.roomPassword != ""
-        #self.globals['tfm']['get']['room']["isTribeHouse"] = self.room.isTribeHouse
-        self.globals['tfm']['get']['room']["language"] = self.room.community
+        self.globals['tfm']['get']['room']['isTribeHouse'] = self.room.isTribeHouse
 
         self.globals['tfm']['get']['room']['objectList'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
         self.globals['tfm']['get']['room']['playerList'] = self.runtime.eval('setmetatable({}, {__len = function(self) local count = 0;for i in next, self do count = count+1 end;return count;end})')
@@ -278,237 +402,18 @@ class Lua:
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["x"] = player.posX
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["y"] = player.posY
 
-    def FixUnicodeError(self, text=u""):
-        if isinstance(text, bytes):
-            text = text.decode()
-        return text
 
-    def Permissions(self):
-        if self.owner is None: 
-            return True
-        if self.owner.isLuaCrew or self.owner.privLevel == 9:
-            return True
-        return False
+    ### system. Functions
+    def addBot(self, npcId, npcName, npcTitle, npcLook, npcPosX, npcPosY, starePlayer, shop="", x=""):
+        client = self.room.clients.get(starePlayer)       
+        if client != None:
+            client.sendPacket(Identifiers.send.NPC, ByteArray().writeInt(npcId).writeUTF(npcName).writeShort(npcTitle).writeBoolean(starePlayer).writeUTF(npcLook).writeShort(npcPosX).writeShort(npcPosY).writeShort(1).writeByte(11).writeShort(0).toByteArray())
 
-    def newTimer(self, callback, _time=0, loop=False, arg1=None, arg2=None, arg3=None, arg4=None):
-        if self.Permissions() == True:
-            if loop:
-                self.createLoop(_time, callback, arg1, arg2, arg3, arg4)
-            else:
-                self.server.loop.call_later(_time, callback, arg1, arg2, arg3, arg4)
-        else:
-            self.Forbidden("system.newTimer")
-
-    def createLoop(self, _time, callback, arg1=None, arg2=None, arg3=None, arg4=None):
-        self.server.loop.call_later(0, callback, arg1, arg2, arg3, arg4)
-        self.server.loop.call_later(_time, lambda: self.createLoop(_time, callback, arg1, arg2, arg3, arg4))
-
-    def setPlayerScore(self, playerName, score, add = False):
-        if add is None:
-            add = False
-        player = self.room.clients.get(playerName)
-        if player:
-            if add:
-                player.playerScore += score
-            else:
-                player.playerScore = score
-            self.room.sendAll(Identifiers.send.Set_Player_Score, ByteArray().writeInt(player.playerCode).writeShort(player.playerScore).toByteArray())
-
-    def disablePhysicalConsumables(self, status):
-        if status == True:
-            self.room.disablePhysicalConsumables = True
-        else:
-            self.room.disablePhysicalConsumables = False
-        
-    def getPermCode(self):
-        mapPerma = self.room.mapPerma
-        return mapPerma
-    
-    def getauthor(self):
-        mapName = self.room.mapName
-        return mapName
-    
-    def getmapCode(self):
-        mapCode = self.room.mapCode
-        return mapCode
-    
-    def htmlfix(self, text):
-        if "<a" in text:
-            if not "</a>" in text:
-                text = text + "</a>"
-        if "<p" in text:
-            if not "</p>" in text:
-                text = text + "</p>"
-        if "<font" in text:
-            if not "</font>" in text:
-                text = text + "</font>"
-        return text
-    
-    def getxmlmap(self):
-        mapXML = self.room.mapXML
-        return mapXML
-        
-    def giveConsumables(self, playerName, consumableId, amount=1): ###### NOT WORK
-        if self.Permissions() == True:
-            player = self.room.clients.get(playerName)
-            if player:
-                player.sendGiveConsumables(consumableId, amount)
-        else:
-            self.Forbidden("tfm.exec.giveConsumables")
-
-    def addLog(self, text, playerName):
-        if self.Permissions() == True:
-            player = self.room.clients.get(playerName)
-            if player != None:
-                player.sendLogMessage(text)
-        else:
-            self.Forbidden("ui.addLog")
-
-    def chatMessage(self, message="", target=None):
-        if self.Permissions() == True:
-            if target == "" or target is None:
-                for player in self.room.clients.values():
-                    player.sendMessage(self.FixUnicodeError(message))
-            else:
-                player = self.room.clients.get(target)
-
-                if player != None:
-                    player.sendMessage(self.FixUnicodeError(message))
-        else:
-            self.Forbidden("tfm.exec.chatMessage")
-
-
-    def setRoomMaxPlayers(self, maxPlayers):
-        if self.Permissions() == True:
-            if maxPlayers > 0:
-                self.room.maxPlayers = maxPlayers
-        else:
-            self.Forbidden("tfm.exec.setRoomMaxPlayers")
-        
-    def setRoomPassword(self, password):
-        if self.Permissions() == True:
-            if len(password) > 0:
-                self.room.roomPassword = password
-                self.sendLangueMessage("", "$Mot_De_Passe : %s" %(password))
-            else:
-                self.room.roomPassword = ""
-                self.sendLangueMessage("", "$MDP_Desactive")
-        else:
-            self.Forbidden("tfm.exec.setRoomPassword")
-        
-    def snow(self):
-        self.room.startSnow(1000, 60, not self.room.isSnowing)
-        
-    def setVampirePlayer(self, playerName):
-        player = self.room.clients.get(playerName)
-        if player != None:
-            player.sendVampireMode(False)
-        
-    def getPlayerSync(self):
-        if self.Permissions() == True:
-            self.chatMessage("Current Sync: "+self.room.currentSyncName, self.owner.playerName)
-        else:
-            self.Forbidden("tfm.exec.getPlayerSync")
-        
-    def setPlayerSync(self, playerName):
-        if self.Permissions() == True:
-            player = self.room.clients.get(playerName)
-            if player != None:
-                player.isSync = True
-                self.room.currentSyncCode = player.playerCode
-                self.room.currentSyncName = player.playerName
-                self.chatMessage("New Sync: "+str(player.playerName), self.owner.playerName)
-        else:
-            self.Forbidden("tfm.exec.setPlayerSync")
-            
-    def explosion(self, x, y, power, distance, miceOnly):
-        for player in self.server.players.values():
-            player.sendPacket([5, 17], [int(x), int(y), int(power), int(distance), bool(miceOnly)])
-            
-
-    def setWorldGravity(self, x, y): # x - wind, y - gravity
-        for player in self.server.players.values():
-            if x == 0:
-                player.room.sendAll(Identifiers.old.send.Gravity, [0, y])
-            elif y == 0:
-                player.room.sendAll(Identifiers.old.send.Gravity, [x, 8])
-            else:
-                player.room.sendAll(Identifiers.old.send.Gravity, [x, y])
-            
-    #def addJoint(self, id, ground1, ground2, jointDefinition):
-        #self.room.sendAll(Identifiers.send.Add_Joint, [id, ground1, ground2, jointDefinition])
-        
-        #self.room.sendAll(Identifiers.send.Add_Joint, ByteArray().writeShort(id).writeShort(ground1).writeShort(ground2).writeBoolean(bool(bodyDef["dynamic"]) if "dynamic" in bodyDef else False).writeByte(int(bodyDef["type"]) if "type" in bodyDef else 0).writeShort(x).writeShort(y).writeShort(int(bodyDef["width"]) if "width" in bodyDef else 0).writeShort(int(bodyDef["height"]) if "height" in bodyDef else 0).writeBoolean(bool(bodyDef["foreground"]) if "foreground" in bodyDef else False).writeShort(float(bodyDef["friction"]) if "friction" in bodyDef else 0).writeShort(float(bodyDef["restitution"]) if "restitution" in bodyDef else 0).writeShort(int(bodyDef["angle"]) if "angle" in bodyDef else 0).writeBoolean("color" in bodyDef).writeInt(int(bodyDef["color"]) if "color" in bodyDef else 0).writeBoolean(bool(bodyDef["miceCollision"]) if "miceCollision" in bodyDef else True).writeBoolean(bool(bodyDef["groundCollision"]) if "groundCollision" in bodyDef else True).writeBoolean(bool(bodyDef["fixedRotation"]) if "fixedRotation" in bodyDef else False).writeShort(int(bodyDef["mass"]) if "mass" in bodyDef else 0).writeShort(float(bodyDef["linearDamping"]) if "linearDamping" in bodyDef else 0).writeShort(float(bodyDef["angularDamping"]) if "angularDamping" in bodyDef else 0).writeBoolean(False).writeUTF("").toByteArray())
-        
-
-    def freezePlayer(this, playerName, freeze=True):
-        player = this.room.clients.get(playerName)
-        if player:
-            player.sendPacket([100, 66], ByteArray().writeBoolean(freeze).toByteArray())
-        
-    def lowerSyncDelay(self, playerName):
-        if self.Permissions() == True:
-            player = self.server.players.get(playerName)
-            if player != None:
-                player.sendPacket(Identifiers.send.Lower_Sync_Delay, [player.playerName])
-        else:
-            self.Forbidden("tfm.exec.lowerSyncDelay")
-        
-    def removeJoint(self, id):
-        self.room.sendAll(Identifiers.send.Remove_Joint, [id])
-        
-    def RemovePhysicObject(self, id):
-        self.room.sendAll(Identifiers.send.Remove_Physic_Object, [id])
-        
-    def addBonus(self, type=1, x=0, y=0, id=0, angle=0, visible=True, targetPlayer=""):
-        p = ByteArray()
-        p.writeShort(x)
-        p.writeShort(y)
-        p.writeByte(type)
-        p.writeShort(angle)
-        p.writeInt(id)
-        p.writeBoolean(visible)
-        if targetPlayer == "" or not targetPlayer:
-            self.room.sendAll([5, 14], p.toByteArray())
-        else:
-            player = self.room.clients.get(targetPlayer)
-            if player != None:
-                player.sendPacket([5, 14], p.toByteArray())
-            
-    def removeBonus(self, id=0, targetPlayer=""):
-        p = ByteArray().writeInt(id)
-        if targetPlayer == "" or not targetPlayer:
-            self.room.sendAll([5, 15], p.toByteArray())
-        else:
-            player = self.room.clients.get(targetPlayer)
-            if player != None:
-                player.sendPacket([5, 15], p.toByteArray())
-            
-    def addConjuration(self, x, y, bl):
-        self.room.sendAll(Identifiers.old.send.Add_Conjuration, [x, y, bl])
-        self.server.loop.call_later(10, self.room.sendAll, Identifiers.old.send.Conjuration_Destroy, [int(x), int(y)])
-        
-    def linkMice(self, Name, Target, status):
-        player = self.server.players.get(Name)
-        player1 = self.server.players.get(Target)
-        if player != None and player1 != None:
-            if status == True:
-                self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(True).writeInt(player.playerCode).writeInt(player1.playerCode).toByteArray())
-            else:
-                self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(False).writeInt(player.playerCode).toByteArray())
-
-    def changePlayerSize(self, name, size):
-        size = float(size)
-        size = 5.0 if size > 5.0 else size
-        size = int(size * 100)
-        playerName = Utils.parsePlayerName(name)
-        if playerName == "*":
-            for player in self.room.clients.copy().values():
-                self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
-        else:
-            player = self.server.players.get(playerName)
-            if player != None:
-                self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
+    def disableChatCommandDisplay(self, command="", hidden=True):
+        if not command in self.HiddenCommands and hidden:
+            self.HiddenCommands.append(self.FixUnicodeError(command))
+        elif command in self.HiddenCommands and not hidden:
+            self.HiddenCommands.remove(self.FixUnicodeError(command))
 
     def loadFile(self, id):
         if self.Permissions() == True:
@@ -540,133 +445,62 @@ class Lua:
         else:
             self.Forbidden("system.loadPlayerData")
         
-    def addBot(self, npcId, npcName, npcTitle, npcLook, npcPosX, npcPosY, starePlayer, shop="", x=""):
-        client = self.room.clients.get(starePlayer)       
-        if client != None:
-            client.sendPacket(Identifiers.send.NPC, ByteArray().writeInt(npcId).writeUTF(npcName).writeShort(npcTitle).writeBoolean(starePlayer).writeUTF(npcLook).writeShort(npcPosX).writeShort(npcPosY).writeShort(1).writeByte(11).writeShort(0).toByteArray())
-
-    def savePlayerData(self, playerName, data):
-        if self.Permissions() == True:
-            if len(data) > self.maxData:
-                return
-            with open(f"./include/lua/playerDatas/{playerName}", "w") as f:
-                f.write(data)
+    def newTimer(self, callback, _time=0, loop=False, *args):
+        _time = _time / 1000
+        if loop:
+            self.lastloopid+=1
+            d = self.createLoop(self.lastloopid, _time, lambda: callback(*args))
+            self.loops[self.lastloopid] = d
+            return self.lastloopid
         else:
-            self.Forbidden("system.savePlayerData")
+            self.lastloopid+=1
+            d = self.server.loop.call_later(_time, lambda: callback(*args))
+            self.loops[self.lastloopid] = d
+            return self.lastloopid
+
+    def removeTimer(self, _id):
+        if self.Permissions() == True:
+            _id = int(_id)
+            if _id in self.loops:
+                self.loops[_id].cancel()
+                while _id in self.loops:
+                    del self.loops[_id]
+        else:
+            self.Forbidden("system.removeTimer")
 
     def saveFile(self, data, id):
         if self.Permissions() == True:
             if len(data) > self.maxData:
                 return
             try:
-                with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "w") as f:
+                with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "a+") as f:
                     f.write(data)
             except:
                 import os
                 os.mkdir(os.path.join("./include/lua/playerDatas/module-team/", self.owner.playerName), 0o6666)
-                with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "w") as f:
+                with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "a+") as f:
                     f.write(data)
             self.emit("FileSaved", (self.owner.playerName, data))
         else:
             self.Forbidden("system.saveFile")
 
-    def addImage(self, imageName = "", target = "", xPosition = 50, yPosition = 50, targetPlayer = ""):
-        if imageName is None:
-            imageName = ""
-        if target is None:
-            target = ""
-        if xPosition is None:
-            xPosition == 50
-        if yPosition is None:
-            yPosition = 50
-        if targetPlayer is None:
-            targetPlayer = ""
-        packet = ByteArray()
-        self.room.lastImageID += 1
-        packet.writeInt(self.room.lastImageID)
-        packet.writeUTF(imageName)
-        packet.writeByte(1 if target.startswith("#") else 2 if target.startswith("$") else 3 if target.startswith("%") else 4 if target.startswith("?") else 5 if target.startswith("_") else 6 if target.startswith("!") else 7 if target.startswith("&") else 0)
-        target = target[1:]
-        packet.writeInt(int(target) if target.isdigit() else self.server.getPlayerCode(Utils.parsePlayerName(target)))
-        packet.writeShort(xPosition)
-        packet.writeShort(yPosition)
-        if targetPlayer == "":
-            self.room.sendAll(Identifiers.send.Add_Image, packet.toByteArray())
+    def savePlayerData(self, playerName, data):
+        if self.Permissions() == True:
+            if len(data) > self.maxData:
+                return
+            with open(f"./include/lua/playerDatas/{playerName}", "a+") as f:
+                f.write(data)
         else:
-            player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
+            self.Forbidden("system.savePlayerData")
+
+    ### ui. Functions
+    def addLog(self, text, playerName):
+        if self.Permissions() == True:
+            player = self.room.clients.get(playerName)
             if player != None:
-                player.sendPacket(Identifiers.send.Add_Image, packet.toByteArray())
-
-    def removeImage(self, imageId):
-        self.room.sendAll(Identifiers.send.Add_Image, ByteArray().writeInt(imageId).toByteArray())
-
-    def playEmote(self, playerName, emoteId, emoteArg = ""):
-        if emoteArg is None:
-            emoteArg = ""
-        player = self.room.clients.get(playerName)
-        if player:
-            player.sendPlayerEmote(emoteId, emoteArg, False, True)
-
-    def disableChatCommandDisplay(self, command="", hidden=True): ###### NOT WORK
-        if not command in self.HiddenCommands and hidden:
-            self.HiddenCommands.append(self.FixUnicodeError(command))
-        elif command in self.HiddenCommands and not hidden:
-            self.HiddenCommands.remove(self.FixUnicodeError(command))
-
-    def tableForeach(self, array, callback):
-        for key, value in array.items():
-            callback(key, value)
-
-    def disableAfkDeath(self, status):
-        if status:
-            self.room.disableAfkKill = True
+                player.sendLogMessage(text)
         else:
-            self.room.disableAfkKill = False
-
-    def disableAllShamanSkills(self, status):
-        if status:
-            self.room.noShamanSkills = True
-        else:
-            self.room.noShamanSkills = False
-
-    def disableAutoNewGame(self, status):
-        if status:
-            self.room.isFixedMap = True
-            self.roomFix = True
-        else:
-            self.room.isFixedMap = False
-            self.roomFix = False
-        
-    def disableAutoScore(self, status):
-        if status:
-            self.room.noAutoScore = True
-        else:
-            self.room.noAutoScore = False
-
-    def disableAutoShaman(self, status):
-        if status:
-            self.room.noShaman = True
-        else:
-            self.room.noShaman = False
-
-    def disableAutoTimeLeft(self, status):
-        if status:
-            self.room.never20secTimer = True
-        else:
-            self.room.never20secTimer = False
-
-    def disableMortCommand(self, status):
-        if status:
-            self.room.blacklistcommands.append("mort")
-            self.room.blacklistcommands.append("die")
-            self.room.blacklistcommands.append("kill")
-        else:
-            try:
-                self.room.blacklistcommands.remove("mort")
-                self.room.blacklistcommands.remove("die")
-                self.room.blacklistcommands.remove("kill")
-            except:
-                pass
+            self.Forbidden("ui.addLog")
 
     def addPopup(self, id, type, text, targetPlayer="", x=50, y=50, width=0, fixedPos=False):
         p = ByteArray().writeInt(id).writeByte(type).writeUTF(self.FixUnicodeError(text)).writeShort(x).writeShort(y).writeShort(width).writeBoolean(fixedPos)
@@ -677,28 +511,8 @@ class Lua:
             if player != None:
                 player.sendPacket(Identifiers.send.Add_Popup, p.toByteArray())
 
-    def updateTextArea(self, id, text, targetPlayer=""):
-        p = ByteArray().writeInt(id).writeUTF(self.FixUnicodeError(text))
-        if targetPlayer == "" or not targetPlayer:
-            self.room.sendAll(Identifiers.send.Update_Text_Area, p.toByteArray())
-        else:
-            client = self.room.clients.get(targetPlayer)
-            if client != None:
-                client.sendPacket(Identifiers.send.Update_Text_Area, p.toByteArray())
-    
-    def displayParticle(self, particleType=0, xPosition=0, yPosition=0, xSpeed=0, ySpeed=0, xAcceleration=0, yAcceleration=0, targetPlayer=""):
-        self.room.displayParticle(particleType, xPosition, yPosition, xSpeed, ySpeed, xAcceleration, yAcceleration, targetPlayer)
-
-    def removeTextArea(self, id, targetPlayer=""):
-        p = ByteArray().writeInt(id)
-        if targetPlayer == "" or not targetPlayer:
-            self.room.sendAll(Identifiers.send.Remove_Text_Area, p.toByteArray())
-        else:
-            player = self.room.clients.get(targetPlayer)
-            if player != None:
-                player.sendPacket(Identifiers.send.Remove_Text_Area, p.toByteArray())
-
-    def addTextArea(self, id, text, targetPlayer="", x=50, y=50, width=0, height=0, backgroundColor=0x324650, borderColor=0, backgroundAlpha=1, t=False, fixedPos=True, op=False):
+    def addTextArea(self, id, text, targetPlayer="", x=50, y=50, width=0, height=0, backgroundColor=0x324650, borderColor=0, backgroundAlpha=1, fixedPos=False):
+        self.roomAreas.append(id)
         if backgroundAlpha:
             backgroundAlpha *= 100
         else:
@@ -723,14 +537,15 @@ class Lua:
             fixedPos = False
 
         p = ByteArray().writeInt(int(id))
-        p.writeUTF(self.FixUnicodeError(text))
-        p.writeShort(int(x)).writeShort(int(y))
+        p.writeUTF(text)
+        p.writeShort(int(x))
+        p.writeShort(int(y))
         p.writeShort(int(width))
         p.writeShort(int(height))
         p.writeInt(int(backgroundColor))
         p.writeInt(int(borderColor))
         p.writeByte(int(100 if backgroundAlpha > 100 else backgroundAlpha))
-        p.writeBoolean(fixedPos)
+        p.writeBoolean(not fixedPos)
         if targetPlayer == "" or not targetPlayer:
             self.room.sendAll(Identifiers.send.Add_Text_Area, p.toByteArray())
         else:
@@ -738,90 +553,92 @@ class Lua:
             if player != None:
                 player.sendPacket(Identifiers.send.Add_Text_Area, p.toByteArray())
 
-    def giveTransformations(self, target, status):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
-        if player != None:
-            if status == True:
-                player.sendPacket([27, 10], 1)
-                player.hasLuaTransformations = True
-            else:
-                player.sendPacket([27, 10], 0)
-                player.hasLuaTransformations = False
-            
+    def removeTextArea(self, id, targetPlayer=""):
+        p = ByteArray().writeInt(id)
+        if targetPlayer == "" or not targetPlayer:
+            self.room.sendAll(Identifiers.send.Remove_Text_Area, p.toByteArray())
+        else:
+            player = self.room.clients.get(targetPlayer)
+            if player != None:
+                player.sendPacket(Identifiers.send.Remove_Text_Area, p.toByteArray())
+
     def setMapName(self, message=""):
         self.room.sendAll(Identifiers.send.Set_Map_Name, ByteArray().writeUTF(str(message)).toByteArray())
         
     def setShamanName(self, message=""):
         self.room.sendAll(Identifiers.send.Set_Shaman_Name, ByteArray().writeUTF(str(message)).toByteArray())
 
-    def giveCheese(self, target=""):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
-        if player != None and not player.isDead and not player.hasCheese:
-            player.sendGiveCheese(0)
+    def updateTextArea(self, id, text, targetPlayer=""):
+        p = ByteArray().writeInt(id).writeUTF(self.FixUnicodeError(text))
+        if targetPlayer == "" or not targetPlayer:
+            self.room.sendAll(Identifiers.send.Update_Text_Area, p.toByteArray())
+        else:
+            client = self.room.clients.get(targetPlayer)
+            if client != None:
+                client.sendPacket(Identifiers.send.Update_Text_Area, p.toByteArray())
 
-    def playerVictory(self, target=""):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
+    ### tfm.exec. Functions
+    def addBonus(self, type=1, x=0, y=0, id=0, angle=0, visible=True, targetPlayer=""):
+        p = ByteArray()
+        p.writeShort(x)
+        p.writeShort(y)
+        p.writeByte(type)
+        p.writeShort(angle)
+        p.writeInt(id)
+        p.writeBoolean(visible)
+        if targetPlayer == "" or not targetPlayer:
+            self.room.sendAll([5, 14], p.toByteArray())
+        else:
+            player = self.room.clients.get(targetPlayer)
+            if player != None:
+                player.sendPacket([5, 14], p.toByteArray())
 
-        if player != None and not player.isDead:
-            if not player.hasCheese:
-                self.giveCheese(playerName)
+    def addConjuration(self, x, y, bl):
+        self.room.sendAll(Identifiers.old.send.Add_Conjuration, [x, y, bl])
+        self.server.loop.call_later(10, self.room.sendAll, Identifiers.old.send.Conjuration_Destroy, [int(x), int(y)])
 
-            player.playerWin(1, 0)
+    def addImage(self, imageName = "", target = "", xPosition = 50, yPosition = 50, targetPlayer = "", scaleX = 1, scaleY = 1, angle = 0, alpha = 1, AnchorX = 0, AnchorY = 0):
+        if imageName is None:
+            imageName = ""
+        if target is None:
+            target = ""
+        if xPosition is None:
+            xPosition == 50
+        if yPosition is None:
+            yPosition = 50
+        if targetPlayer is None:
+            targetPlayer = ""
+        if scaleX is None:
+            scaleX = 1
+        if scaleY is None:
+            scaleY = 1
+        if angle is None:
+            angle = 0
+        if alpha is None:
+            alpha = 1
+        if AnchorX is None:
+            AnchorX = 0
+        if AnchorY is None:
+            AnchorY = 0
+        packet = ByteArray()
+        self.room.lastImageID += 1
+        packet.writeInt(self.room.lastImageID)
+        self.imagesadd.append(self.room.lastImageID)
+        packet.writeUTF(imageName)
+        packet.writeByte(1 if target.startswith("#") else 2 if target.startswith("$") else 3 if target.startswith("%") else 4 if target.startswith("?") else 5 if target.startswith("_") else 6 if target.startswith("!") else 7 if target.startswith("&") else 0)
+        target = target[1:]
+        packet.writeInt(int(target) if target.isdigit() else self.server.getPlayerCode(Utils.parsePlayerName(target)))
+        packet.writeShort(xPosition)
+        packet.writeShort(yPosition)
+        if targetPlayer == "":
+            self.room.sendAll(Identifiers.send.Add_Image, packet.toByteArray())
+        else:
+            player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
+            if player != None:
+                player.sendPacket(Identifiers.send.Add_Image, packet.toByteArray())
 
-    def respawnPlayer(self, target=""):
-        playerName = Utils.parsePlayerName(target)
-        if playerName in self.room.clients:
-            self.room.respawnSpecific(playerName)
-
-    def removeCheese(self, target=""):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
-        if player != None and not player.isDead and player.hasCheese:
-            player.hasCheese = False
-            player.sendRemoveCheese()
-
-    def giveMeep(self, target=""):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
-        if player != None and not player.isDead:
-            player.sendPacket(Identifiers.send.Can_Meep, 1)
-
-    def killPlayer(self, target=""):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
-        if not player.isDead:
-            player.isDead = True
-            if player.room.noAutoScore:
-                player.playerScore += 1
-            player.sendPlayerDied()
-            player.room.checkChangeMap()
-
-    def setGameTime(self, time=0, add=False):
-        if add is None:
-            add = False
-        if str(time).isdigit():
-            if add:
-                iTime = self.room.roundTime + (self.room.gameStartTime - Utils.getTime()) + self.room.addTime + int(time)
-            else:
-                iTime = int(time)
-            iTime = 5 if iTime < 5 else (32767 if iTime > 32767 else iTime)
-            for player in self.room.clients.values():
-                player.sendRoundTime(iTime)
-
-            self.room.roundTime = iTime
-            self.room.changeMapTimers(iTime)
-
-    def setShaman(self, target=""):
-        player = self.room.clients.get(Utils.parsePlayerName(target))
-        if player != None:
-            player.isShaman = True
-            self.room.sendAll(Identifiers.send.New_Shaman, ByteArray().writeInt(player.playerCode).writeByte(player.shamanType).writeShort(player.shamanLevel).writeShort(player.Skills.getShamanBadge()).toByteArray())
-
-    def moveCheese(self, x=0, y=0):
-        self.room.sendAll(Identifiers.old.send.Move_Cheese, [x, y])
+    def addJoint(self, id=0, ground1=0, ground2=0, jointDefinition={}):
+        self.room.sendAll(Identifiers.send.Add_Joint, [id, ground1, ground2, jointDefinition])
 
     def addShamanObject(self, type=0, x=0, y=0, angle=0, vx=0, vy=0, ghost=False):
         self.LastRoomObjectID += 1
@@ -840,8 +657,166 @@ class Lua:
 
         return self.LastRoomObjectID
 
+    def attachBalloon(self, playerName="", isAttached=True, colorType=1, ghost=False, speed=1):
+        colorType = 4 if colorType > 4 else 1 if colorType < 1 else colorType
+        player = self.server.players.get(playerName)
+        if player != None:
+            p = self.room.objectID + 1
+            player.sendPlaceObject(p,28,player.posX,player.posY-25,0,0,0,not ghost,True,colorType)
+            if isAttached:
+                self.room.sendAll([144, 9], ByteArray().writeByte(-1).toByteArray())
+                self.room.sendAll([144, 20], ByteArray().writeInt(player.playerCode).writeInt(p).writeInt(speed*1000).toByteArray())
+
+    def changePlayerSize(self, name, size):
+        size = float(size)
+        size = 5.0 if size > 5.0 else size
+        size = int(size * 100)
+        playerName = Utils.parsePlayerName(name)
+        if playerName == "*":
+            for player in self.room.clients.copy().values():
+                self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
+        else:
+            player = self.server.players.get(playerName)
+            if player != None:
+                self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
+
+    def chatMessage(self, message="", target=""):
+        if self.Permissions() == True:
+            if target == "":
+                for player in self.room.clients.values():
+                    player.sendMessage(self.FixUnicodeError(message))
+            else:
+                player = self.room.clients.get(target)
+
+                if player != None:
+                    player.sendMessage(self.FixUnicodeError(message))
+        else:
+            self.Forbidden("tfm.exec.chatMessage")
+
+    def disableAfkDeath(self, status=True):
+        self.room.disableAfkKill = status
+        
+    def disableAllShamanSkills(self, status=True):
+        self.room.noShamanSkills = status
+
+    def disableAutoNewGame(self, status=True):
+        self.room.isFixedMap = status
+        self.roomFix = status
+        
+    def disableAutoScore(self, status=True):
+        self.room.noAutoScore = status
+
+    def disableAutoShaman(self, status=True):
+        self.room.noShaman = status
+
+    def disableAutoTimeLeft(self, status=True):
+        self.room.never20secTimer = status
+    
+    def displayParticle(self, particleType=0, xPosition=0, yPosition=0, xSpeed=0, ySpeed=0, xAcceleration=0, yAcceleration=0, targetPlayer=""):
+        self.room.displayParticle(particleType, xPosition, yPosition, xSpeed, ySpeed, xAcceleration, yAcceleration, targetPlayer)
+
+    def explosion(self, x, y, power, distance, miceOnly):
+        for player in self.server.players.values():
+            player.sendPacket([5, 17], [int(x), int(y), int(power), int(distance), bool(miceOnly)])
+
+    def freezePlayer(self, playerName, freeze=True):
+        player = self.room.clients.get(playerName)
+        if player:
+            player.sendPacket([100, 66], ByteArray().writeBoolean(freeze).toByteArray())
+
+    def getPlayerSync(self):
+        if self.Permissions() == True:
+            self.chatMessage("Current Sync: "+self.room.currentSyncName, self.owner.playerName)
+        else:
+            self.Forbidden("tfm.exec.getPlayerSync")
+
+    def giveCheese(self, target):
+        playerName = Utils.parsePlayerName(target)
+        player = self.room.clients.get(playerName)
+        if player != None and not player.isDead and not player.hasCheese:
+            player.sendGiveCheese(0)
+
+    def giveConsumables(self, playerName, consumableId, amount=1):
+        if self.Permissions() == True:
+            player = self.room.clients.get(playerName)
+            if player:
+                player.giveConsumable(consumableId, amount)
+        else:
+            self.Forbidden("tfm.exec.giveConsumables")
+
+    def giveMeep(self, target, status=True):
+        playerName = Utils.parsePlayerName(target)
+        player = self.room.clients.get(playerName)
+        if player != None and not player.isDead:
+            player.sendPacket(Identifiers.send.Can_Meep, status)
+
+    def giveTransformations(self, target, status):
+        playerName = Utils.parsePlayerName(target)
+        player = self.room.clients.get(playerName)
+        if player != None:
+            if status == True:
+                player.sendPacket([27, 10], 1)
+                player.hasLuaTransformations = True
+            else:
+                player.sendPacket([27, 10], 0)
+                player.hasLuaTransformations = False
+
+    def killPlayer(self, target):
+        playerName = Utils.parsePlayerName(target)
+        player = self.room.clients.get(playerName)
+        if not player.isDead:
+            player.isDead = True
+            if player.room.noAutoScore:
+                player.playerScore += 1
+            player.sendPlayerDied()
+            player.room.checkChangeMap()
+
+    def linkMice(self, Name, Target, status):
+        player = self.server.players.get(Name)
+        player1 = self.server.players.get(Target)
+        if player != None and player1 != None:
+            if status == True:
+                self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(True).writeInt(player.playerCode).writeInt(player1.playerCode).toByteArray())
+            else:
+                self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(False).writeInt(player.playerCode).toByteArray())
+            
+    def lowerSyncDelay(self, playerName):
+        if self.Permissions() == True:
+            player = self.server.players.get(playerName)
+            if player != None:
+                player.sendPacket(Identifiers.send.Lower_Sync_Delay, [player.playerName])
+        else:
+            self.Forbidden("tfm.exec.lowerSyncDelay")
+
+    def moveCheese(self, x=0, y=0):
+        self.room.sendAll(Identifiers.old.send.Move_Cheese, [x, y])
+            
+    def moveObject(self, id=0, xy=0, vy=0, d=False, x=0, y=0, r=False, i=0, b=False):
+        self.RoomObjects[id]['velX'] = x
+        self.RoomObjects[id]['velY'] = y
+        self.RoomObjects[id]['posX'] = xy
+        self.RoomObjects[id]['posY'] = vy
+        self.RoomObjects[id]['angle'] = i
+        self.RefreshTFMGet()
+        packet = ByteArray()
+        packet.writeInt(id)
+        packet.writeShort(xy)
+        packet.writeShort(vy)
+        packet.writeBoolean(d)
+        packet.writeShort(x)
+        packet.writeShort(y)
+        packet.writeBoolean(r)
+        packet.writeShort(i)
+        packet.writeBoolean(b)
+        self.room.sendAll(Identifiers.send.Move_Object, packet.toByteArray())
+
+    def movePlayer(self, playerName, xPosition, yPosition, pOffSet, xSpeed, ySpeed, sOffSet): ##########
+        player = self.room.clients.get(playerName)
+        if player != None:
+            player.sendPacket(Identifiers.send.Move_Player, ByteArray().writeShort(xPosition).writeShort(yPosition).writeBoolean(pOffSet).writeShort(xSpeed).writeShort(ySpeed).writeBoolean(sOffSet).toByteArray())
+
     def newGame(self, mapCode=None, mirroredMap=False):
-        self.room.forceNextMap = mapCode
+        self.room.forceNextMap = str(mapCode)
         self.room.mapInverted = mirroredMap
 
         self.room.changeMapTimers(0)
@@ -853,25 +828,155 @@ class Lua:
         self.room.mapChange()
         if self.roomFix:
             self.room.isFixedMap = True
-            
-            
-            
-    def sendLuaMessage(self, *args):
-        message = ""
-        for x in args:
-            message += (self.globals.tostring(x) if self.globals.type(x) != "userdata" else "userdata") + ("  " if len(args)>1 else "")
-        if message != "" and not self.owner is None:
-            self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] %s" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str(message)))
 
-    def EventLoop(self):
-        if not self.runtime is None:
-            self.RefreshTFMGet()
-            elapsed = (Utils.getTime() - self.room.gameStartTime) * 1000
-            remaining = ((self.room.roundTime + self.room.addTime) - (Utils.getTime() - self.room.gameStartTime)) * 1000
-            self.emit('Loop', (elapsed if elapsed >= 0 else 0, remaining if remaining >= 0 else 0))
+    def playEmote(self, playerName, emoteId, emoteArg=""):
+        if emoteArg is None:
+            emoteArg = ""
+        player = self.room.clients.get(playerName)
+        if player:
+            player.sendPlayerEmote(emoteId, emoteArg, False, True)
 
-            self.server.addCallLater(0.5, self.EventLoop)
+    def playerVictory(self, target):
+        playerName = Utils.parsePlayerName(target)
+        player = self.room.clients.get(playerName)
 
+        if player != None and not player.isDead:
+            if not player.hasCheese:
+                self.giveCheese(playerName)
+
+            player.playerWin(1, 0)
+
+    def removeBonus(self, id=0, targetPlayer=""):
+        p = ByteArray().writeInt(id)
+        if targetPlayer == "" or not targetPlayer:
+            self.room.sendAll([5, 15], p.toByteArray())
+        else:
+            player = self.room.clients.get(targetPlayer)
+            if player != None:
+                player.sendPacket([5, 15], p.toByteArray())
+              
+    def removeCheese(self, target):
+        playerName = Utils.parsePlayerName(target)
+        player = self.room.clients.get(playerName)
+        if player != None and not player.isDead and player.hasCheese:
+            player.hasCheese = False
+            player.sendRemoveCheese()
+              
+    def removeImage(self, imageId):
+        self.room.sendAll(Identifiers.send.Add_Image, ByteArray().writeInt(imageId).toByteArray())
+        
+    def removeJoint(self, id=0):
+        self.room.sendAll(Identifiers.send.Remove_Joint, [id])
+        
+    def RemovePhysicObject(self, id):
+        self.room.sendAll(Identifiers.send.Remove_Physic_Object, [id])
+
+    def respawnPlayer(self, target):
+        playerName = Utils.parsePlayerName(target)
+        if playerName in self.room.clients:
+            self.room.respawnSpecific(playerName)
+
+    def setAutoMapFlipMode(self, status=False):
+        self.room.mapInverted = status
+
+    def setGameTime(self, time=0, add=False):
+        if add is None:
+            add = False
+        if str(time).isdigit():
+            if add:
+                iTime = self.room.roundTime + (self.room.gameStartTime - Utils.getTime()) + self.room.addTime + int(time)
+            else:
+                iTime = int(time)
+            iTime = 5 if iTime < 5 else (32767 if iTime > 32767 else iTime)
+            for player in self.room.clients.values():
+                player.sendRoundTime(iTime)
+
+            self.room.roundTime = iTime
+            self.room.changeMapTimers(iTime)
+
+    def setNameColor(self, playerName, color):
+        if playerName in self.room.clients:
+            self.room.sendAll(Identifiers.send.Set_Name_Color, ByteArray().writeInt(self.room.clients.get(playerName).playerCode).writeInt(color).toByteArray())
+
+    def setPlayerScore(self, playerName, score, amount=False):
+        if amount is None:
+            amount = False
+        player = self.room.clients.get(playerName)
+        if player:
+            if amount:
+                player.playerScore += score
+            else:
+                player.playerScore = score
+            self.room.sendAll(Identifiers.send.Set_Player_Score, ByteArray().writeInt(player.playerCode).writeShort(player.playerScore).toByteArray())
+
+    def setPlayerSync(self, playerName):
+        if self.Permissions() == True:
+            player = self.room.clients.get(playerName)
+            if player != None:
+                player.isSync = True
+                self.room.currentSyncCode = player.playerCode
+                self.room.currentSyncName = player.playerName
+                self.chatMessage("New Sync: "+str(player.playerName), self.owner.playerName)
+        else:
+            self.Forbidden("tfm.exec.setPlayerSync")
+
+    def setRoomMaxPlayers(self, maxPlayers):
+        if self.Permissions() == True:
+            if maxPlayers > 0:
+                self.room.maxPlayers = maxPlayers
+        else:
+            self.Forbidden("tfm.exec.setRoomMaxPlayers")
+
+    def setRoomPassword(self, password):
+        if self.Permissions() == True:
+            if len(password) > 0:
+                self.room.roomPassword = password
+            else:
+                self.room.roomPassword = ""
+        else:
+            self.Forbidden("tfm.exec.setRoomPassword")
+
+    def setShaman(self, target=""):
+        player = self.room.clients.get(Utils.parsePlayerName(target))
+        if player != None:
+            player.isShaman = True
+            self.room.sendAll(Identifiers.send.New_Shaman, ByteArray().writeInt(player.playerCode).writeByte(player.shamanType).writeShort(player.shamanLevel).writeShort(player.Skills.getShamanBadge()).toByteArray())
+
+    def setVampirePlayer(self, playerName):
+        player = self.room.clients.get(playerName)
+        if player != None:
+            player.sendVampireMode(False)
+            
+    def setWorldGravity(self, x=0, y=0):
+        for player in self.server.players.values():
+            if x == 0:
+                player.room.sendAll(Identifiers.old.send.Gravity, [0, y])
+            elif y == 0:
+                player.room.sendAll(Identifiers.old.send.Gravity, [x, 8])
+            else:
+                player.room.sendAll(Identifiers.old.send.Gravity, [x, y])
+    
+    def snow(self, time=0, power=0):
+        self.room.startSnow(time, power, not self.room.isSnowing)
+    
+    ### Others
+    
+    def getPermCode(self):
+        mapPerma = self.room.mapPerma
+        return mapPerma
+    
+    def getauthor(self):
+        mapName = self.room.mapName
+        return mapName
+    
+    def getmapCode(self):
+        mapCode = self.room.mapCode
+        return mapCode
+    
+    def getxmlmap(self):
+        mapXML = self.room.mapXML
+        return mapXML
+                        
     def emit(self, eventName="", args=()):
         if self.runtime is None:
             return
@@ -898,21 +1003,76 @@ class Lua:
         except Exception as error:
             if not self.owner is None:
                 self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] <BL>%s</BL>" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str(error)))
+   
+    def stopModule(self, playerName="", action=0):
+        self.room.isMinigame = False
+        self.room.minigame = None
+        self.runtime = None
+        self.running = False
+        self.room.startSnow(0, 10, False)
+
+        if self.room.isTribeHouse:
+            self.room.countStats = False
+            self.room.isTribeHouse = True
+            self.room.autoRespawn = True
+            self.room.never20secTimer = True
+            self.room.noShaman = True
+            self.room.disableAfkKill = True
+            self.room.isFixedMap = True
+            self.room.roundTime = 0
+
+        if self.room.changeMapTimer != None:
+            self.room.changeMapTimer.cancel()
+        self.room.changeMapTimers(5)
+        self.room.canChangeMap = True
+        self.room.mapChange()
+
+        if self.LastRoomObjectID > 2000:
+            while self.LastRoomObjectID > 2000:
+                self.room.removeObject(self.LastRoomObjectID)
+                self.LastRoomObjectID -= 1
+        
+        for i in self.roomAreas:
+            self.removeTextArea(i)
+        
+        for i in self.imagesadd:
+            self.removeImage(i)
+            
+        #for i in self.roomPopups:
+            #self.removePopup(i)
+        
+        for _id in self.loops:
+            self.loops[_id].cancel()
+            
+        self.roomAreas = []
+        self.imagesadd = []
+        self.loops = {}
+
+        if playerName != "" and not self.room.minigame is None:
+            if not self.room.minigame.owner is None:
+                self.room.minigame.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] %s by: <J>%s</J>" % (playerName, str(time.strftime("%H:%M:%S")), "Module stopped" if action == 0 else "Another module was loaded", str(playerName)))
+
+    def giveEventGift(self, playerName, gift=""):
+        if self.Permissions() == True:
+            pass
+            
+        else:
+            self.Forbidden("system.giveEventGift")
 
     def RunCode(self, code=""):
-        # for while_stmt in re.findall('while[\s+(].*[\s+)]do', code): #while loop
-            # id = int(time.time())
-            # code = code.replace(while_stmt, """
-            # local __while__%s = {
-                # time = os.time() +  0.4,
-                # callback = function(self)
-                    # if (os.time() - self.time >= 0) then
-                        # error("Lua destroyed: Runtime Too Long")
-                    # end 
-                    
+         #for while_stmt in re.findall('while[\s+(].*[\s+)]do', code): #while loop
+             #id = int(time.time())
+             #code = code.replace(while_stmt, """
+             #local __while__%s = {
+                 #time = os.time() +  0.4,
+                 #callback = function(self)
+                     #if (os.time() - self.time >= 0) then
+                         #error("Lua destroyed: Runtime Too Long")
+                     #end 
+                    #
                     # return (%s)
                 # end
-            # }
+             #}
             # while(__while__%s:callback())do""" % (id, while_stmt[5:-2], id))
     
         if self.runtime is None:
@@ -927,8 +1087,6 @@ class Lua:
 
             if not self.owner is None:
                 self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] Script loaded in <J>%.2f</J>s." % (self.owner.playerName, str(time.strftime("%H:%M:%S")), te))
-                
-
 
             self.script = code
         except Exception as error:

@@ -1,23 +1,13 @@
 #coding: utf-8
 import re, json, random, urllib, traceback, time as _time, struct, asyncio
 
+loop = asyncio.get_event_loop()
+
 # Game
 from utils import Utils
 from ByteArray import ByteArray
 from Identifiers import Identifiers
 from Lua import Lua
-
-# Library
-from collections import deque
-class Reactor1:
-    def __init__(self):
-        self.loop = asyncio.get_event_loop()
-    def callLater(self, *args, **kwargs):
-        return self.loop.call_later(*args, **kwargs)
-    def callFromThread(self, func):
-        return func()
-reactor = Reactor1()
-
 
 class Packets:
     def __init__(self, player, server):
@@ -26,7 +16,7 @@ class Packets:
         self.Cursor = player.Cursor
         self.isOpenedHelpCommand = False
 
-    def parsePacket(self, packetID, C, CC, packet):
+    async def parsePacket(self, packetID, C, CC, packet):
         #CC - 26, C - 6
         if C == Identifiers.recv.Old_Protocol.C:
             if CC == Identifiers.recv.Old_Protocol.Old_Protocol:
@@ -352,7 +342,6 @@ class Packets:
             
         elif C == Identifiers.recv.Chat.C:
             if CC == Identifiers.recv.Chat.Chat_Message:
-                #packet = self.descriptPacket(packetID, packet)
                 message = packet.readUTF().replace("&amp;#", "&#").replace("<", "&lt;")
                 if self.client.isGuest:
                     self.client.sendLangueMessage("", "$Créer_Compte_Parler")
@@ -388,7 +377,7 @@ class Packets:
                                     self.client.room.sendAllChat(self.client.playerCode, self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, self.client.langueID, 2)
                                 else:
                                     self.client.room.sendAllChat(self.client.playerCode, self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, self.client.langueID, self.server.checkMessage(message))
-                                reactor.callLater(0.9, self.client.chatEnable)
+                                self.server.loop.call_later(0.9, self.client.chatEnable)
                                 self.client.chatdisabled = True
                             else:
                                 self.client.sendLangueMessage("", "$Message_Identique")
@@ -401,6 +390,9 @@ class Packets:
                         self.server.chatMessages[self.client.playerName] = messages
                     else:
                         self.server.chatMessages[self.client.playerName].append([_time.strftime("%Y/%m/%d %H:%M:%S"), message])
+                if self.client.room.luaRuntime != None:
+                    self.client.room.luaRuntime.emit("ChatMessage", (self.client.playerName, message))
+                    
                 return
                 ##else:
 ##                    self.client.sendMessage("<ROSE>You need 3 cheeses to speak.")
@@ -429,7 +421,7 @@ class Packets:
                 command = packet.readUTF()
                 try:
                     if _time.time() - self.client.CMDTime > 1:
-                        self.client.Commands.parseCommand(command)
+                        loop.create_task(self.client.Commands.parseCommand(command))
                         self.client.CMDTime = _time.time()
                 except Exception as e:
                     with open("./logs/Errors/Commands.log", "a") as f:
@@ -532,6 +524,8 @@ class Packets:
                 posX, posY = packet.readShort(), packet.readShort()
                 self.client.room.sendAll(Identifiers.send.Meep_IMG, ByteArray().writeInt(self.client.playerCode).toByteArray())
                 self.client.room.sendAll(Identifiers.send.Meep, ByteArray().writeInt(self.client.playerCode).writeShort(posX).writeShort(posY).writeInt(10 if self.client.isShaman else 5).toByteArray())
+                if self.client.room.luaRuntime != None:
+                    self.client.room.luaRuntime.emit("PlayerMeep", (self.client.playerName))
                 return
 
             elif CC == Identifiers.recv.Player.Bolos:
@@ -749,7 +743,6 @@ class Packets:
 
         elif C == Identifiers.recv.Login.C:
             if CC == Identifiers.recv.Login.Create_Account:
-                #packet = self.descriptPacket(packetID, packet)
                 playerName, password, email, captcha, url, test = Utils.parsePlayerName(packet.readUTF()), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readUTF()
                 if self.client.checkTimeAccount():
                     createTime = _time.time() - self.client.CRTTime
@@ -783,8 +776,7 @@ class Packets:
                         playerName += "#" + tag
                         self.client.sendAccountTime()
                         self.server.lastPlayerID += 1
-                        self.Cursor.execute("insert into users values (%s, %s, %s, 1, 0, 0, 0, 0, %s, %s, 0, 0, 0, 0, 0, '', '', '', '1;0,0,0,0,0,0,0,0,0,0,0', '0,0,0,0,0,0,0,0,0,0', '78583a', '95d9d6', %s, '{}', '', '', '', '', '', '', '', '', 0, 70, 0, 0, '', 0, '', '', 0, 0, '', 0, 0, 0, '', '', '0,0,0,0', '0,0,0,0', '23:20', '23', 0, 0, '', 0, 0, 0, '', '', '', 0, 0, '2,8,0,0,0,189,133,0,0', 0, %s, '0#0#0#0#0#0', '', '', '', '24:0', 0, 'xx', '0.jpg', 1, '', 0, 0, 0, '', 0, 1, %s, '', 0, 0, 'Little Mouse', 0, 0, %s)", [playerName, password, self.server.lastPlayerID, self.server.initialCheeses, self.server.initialFraises, Utils.getTime(), self.client.langue, email, '{}'])
-                        #self.Cursor.execute("insert into DailyQuest values (%s, '237129', '0', '20', '0', '20', '1')", [self.server.lastPlayerID])
+                        self.Cursor.execute("insert into users values (%s, %s, %s, 1, 0, 0, 0, 0, %s, %s, 0, 0, 0, 0, 0, '', '', '', '1;0,0,0,0,0,0,0,0,0,0,0', '0,0,0,0,0,0,0,0,0,0', '78583a', '95d9d6', %s, '{}', '', '', '', '', '', '', '', '', 0, 70, 0, 0, '', 0, '', '', 0, 0, '', 0, 0, 0, '', '', '0,0,0,0', '0,0,0,0', '23:20', '23', 0, 0, '', 0, 0, '', '', '', %s, '0#0#0#0#0#0', 0, 'xx', '0.jpg', 1, '', 0, 0, '', 0, 1, %s, '', 'Little Mouse', 0, 0, %s)", [playerName, password, self.server.lastPlayerID, self.server.initialCheeses, self.server.initialFraises, Utils.getTime(), self.client.langue, email, '{}'])
                         self.client.loginPlayer(playerName, password, "\x03[Tutorial] %s" %(playerName))
                         self.client.sendServerMessage("The ip %s created account <V>%s</V>. (<J>%s</J>)." %(self.client.ipAddress, playerName, self.client.langue))
                         self.server.updateConfig()
@@ -800,7 +792,6 @@ class Packets:
 
 
             elif CC == Identifiers.recv.Login.Login:
-                #packet = self.descriptPacket(packetID, packet)
                 playerName, password, url, startRoom, resultKey, byte = Utils.parsePlayerName(packet.readUTF()), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readInt(), packet.readByte()
                 #authKey = self.client.authKey
                 #print(url)
@@ -848,7 +839,7 @@ class Packets:
 
             elif CC == Identifiers.recv.Login.Dummy:
                 if self.client.awakeTimer != None: self.client.awakeTimer.cancel()
-                self.client.awakeTimer = reactor.callLater(120, self.client.transport.close)
+                self.client.awakeTimer = self.server.loop.call_later(120, self.client.transport.close)
                 return
 
             elif CC == Identifiers.recv.Login.Player_Info or CC == Identifiers.recv.Login.Player_Info2 or CC == Identifiers.recv.Login.Temps_Client:
@@ -962,7 +953,7 @@ class Packets:
             if CC == Identifiers.recv.Lua.Lua_Script:
                 #script = packet.readUTFBytes(((packet.readByte() << 24) & 0xFF) | packet.readShort()).decode()
                 script = packet.readUTFBytes(int.from_bytes(packet.read(3),'big')).decode()
-                if self.client.privLevel >= 9 or self.client.isLuaCrew:
+                if (self.client.privLevel >= 9 or self.client.isLuaCrew or self.client.privLevel == 4) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp):
                     if not self.client.isLuaAdmin:
                         if self.client.room.luaRuntime == None:
                             self.client.room.luaRuntime = Lua(self.client.room, self.server)
@@ -974,83 +965,22 @@ class Packets:
             elif CC == Identifiers.recv.Lua.Key_Board:
                 key, down, posX, posY = packet.readShort(), packet.readBoolean(), packet.readShort(), packet.readShort()
                 
-                if key == 9 and self.client.privLevel >= 7:
-                    if self.isOpenedHelpCommand == False:
-                        self.client.sendLogMessage(self.client.sendModerationCommands())
-                        self.isOpenedHelpCommand = True
-                    else:
-                        self.isOpenedHelpCommand = False
+                #if key == 9 and self.client.privLevel >= 7:
+                    #if self.isOpenedHelpCommand == False:
+                        #self.client.sendLogMessage(self.client.sendModerationCommands())
+                        #self.isOpenedHelpCommand = True
+                    #else:
+                        #self.isOpenedHelpCommand = False
                 
-                if self.client.isFlyMod and key == 32:
-                    self.room.bindKeyBoard(self.playerName, 32, False, self.room.isFly)
-                
-                if self.client.isFFA and key == 40:
-                    if self.client.canSpawnCN == True:
-                        if self.client.isMovingRight == True and self.client.isMovingLeft == False:
-                            reactor.callLater(0.2, self.client.Utility.spawnObj, 17, posX - 10, posY +15, 90)
-                        if self.client.isMovingRight == False and self.client.isMovingLeft == True:
-                            reactor.callLater(0.2, self.client.Utility.spawnObj, 17, posX + 10, posY +25, 270)
-                        reactor.callLater(2.5, self.client.Utility.removeObj)
-                        self.client.canSpawnCN = False
-                        reactor.callLater(1.3, self.client.enableSpawnCN)
-
                 #elif self.client.room.mapCode == 2002 and self.client.room.isHuggingEvent:
                     #if self.client.posX >= 789 and self.client.posX <= 911 and self.client.posY >= 354 and self.client.posY <= 356:
-
-                if self.client.isSpeed and key == 32:
-                    self.client.room.movePlayer(self.client.playerName, 0, 0, True, 50 if self.client.isMovingRight else -50, 0, True)
-                if self.client.room.isFlyMod and key == 32:
-                    self.client.room.movePlayer(self.client.playerName, 0, 0, True, 0, -50, True)
-                if self.client.isFly and key == 32:
-                    self.client.room.movePlayer(self.client.playerName, 0, 0, True, 0, -50, True)
-
-                if self.client.room.isDeathmatch and key == 3:
-                    if self.client.room.canCannon:
-                        if not self.client.canCN:
-                            self.client.room.objectID += 1
-                            idCannon = {15: "149aeaa271c.png", 16: "149af112d8f.png", 17: "149af12c2d6.png", 18: "149af130a30.png", 19: "149af0fdbf7.png", 20: "149af0ef041.png", 21: "149af13e210.png", 22: "149af129a4c.png", 23: "149aeaa06d1.png"}
-                            #idCannon = "149aeaa271c.png" if self.client.deathStats[4] == 15 else "149af112d8f.png" if self.client.deathStats[4] == 16 else "149af12c2d6.png"
-                            if self.client.isMovingRight:
-                                x = int(self.client.posX+self.client.deathStats[0]) if self.client.deathStats[0] < 0 else int(self.client.posX+self.client.deathStats[0])
-                                y = int(self.client.posY+self.client.deathStats[1]) if self.client.deathStats[1] < 0 else int(self.client.posY+self.client.deathStats[1])
-                                self.client.sendPlaceObject(self.client.room.objectID, 17, x, y, 90, 0, 0, True, True)
-                                if self.client.deathStats[4] in [15, 16, 17, 18, 19, 20, 21, 22, 23]:
-                                    if not self.client.deathStats[3] == 1:
-                                        self.client.room.sendAll([29, 19], ByteArray().writeInt(self.client.playerCode).writeUTF(idCannon[self.client.deathStats[4]]).writeByte(1).writeInt(self.client.room.objectID).toByteArray()+"\xff\xf0\xff\xf0")
-                            else:
-                                x = int(self.client.posX-self.client.deathStats[0]) if self.client.deathStats[0] < 0 else int(self.client.posX-self.client.deathStats[0])
-                                y = int(self.client.posY+self.client.deathStats[1]) if self.client.deathStats[1] < 0 else int(self.client.posY+self.client.deathStats[1])
-                                self.client.sendPlaceObject(self.client.room.objectID, 17, x, y, -90, 0, 0, True, True)
-                                if self.client.deathStats[4] in [15, 16, 17, 18, 19, 20, 21, 22, 23]:
-                                    if not self.client.deathStats[3] == 1:
-                                        self.client.room.sendAll([29, 19], ByteArray().writeInt(self.client.playerCode).writeUTF(idCannon[self.client.deathStats[4]]).writeByte(1).writeInt(self.client.room.objectID).toByteArray()+"\xff\xf0\xff\xf0")
-                            self.client.canCN = True       
-                            self.canCCN = reactor.callLater(0.8, self.client.cnTrueOrFalse)        
-                if self.client.room.isDeathmatch and key == 79:
-                    self.client.sendDeathInventory()
-                if self.client.room.isDeathmatch and key == 80:
-                    self.client.sendDeathProfile()
                     
-                if self.client.room.isFFARace and key == 3:
-                    if self.client.canCannon:
-                        itemID = random.randint(100, 999)
-                        if self.client.isMovingRight:
-                            reactor.callLater(0.2, lambda: self.client.room.sendAll(Identifiers.send.Spawn_Object, ByteArray().writeInt(itemID).writeShort(17).writeShort(posX + -5).writeShort(posY + 15).writeShort(90).writeShort(0).writeByte(1).writeByte(0).toByteArray()))
-                        else:
-                            reactor.callLater(0.2, lambda: self.client.room.sendAll(Identifiers.send.Spawn_Object, ByteArray().writeInt(itemID).writeShort(17).writeShort(posX - -5).writeShort(posY + 15).writeShort(-90).writeShort(0).writeByte(1).writeByte(0).toByteArray()))
-                        reactor.callLater(2.5, lambda: self.client.sendPacket(Identifiers.send.Remove_Object, ByteArray().writeInt(itemID).writeBoolean(True).toByteArray()))
-                        self.client.canCannon = False
-                        reactor.callLater(1.3, setattr, self.client, "canCannon", True)
-                        
                 if self.client.room.luaRuntime != None:
                     self.client.room.luaRuntime.emit("Keyboard", (self.client.playerName, key, down, posX, posY))
                 return
             
             elif CC == Identifiers.recv.Lua.Mouse_Click:
-                posX, posY = packet.readShort(), packet.readShort()
-                if self.client.isTeleport:
-                    self.client.room.movePlayer(self.client.playerName, posX, posY, False, 0, 0, False)
-                    
+                posX, posY = packet.readShort(), packet.readShort()                    
                 if self.client.room.luaRuntime != None:
                     self.client.room.luaRuntime.emit("Mouse", (self.client.playerName, posX, posY))
                 return
@@ -1063,7 +993,6 @@ class Packets:
 
             elif CC == Identifiers.recv.Lua.Text_Area_Callback:
                 textAreaID, event = packet.readInt(), packet.readUTF()
-                #self.client.modoPwet.textAreaCallback(textAreaID, event) # Modopwet Events
                 ## Menself Menu System ##
                 
                 if event in ["lbileri","lbgeri","lbkapat"]:
@@ -1096,25 +1025,6 @@ class Packets:
                     for x in range(0, 100):                                 
                         self.client.sendPacket([29, 22], ByteArray().writeInt(x).toByteArray())
                         
-                if textAreaID in [8983, 8984, 8985]:
-                    if event.startswith("inventory"):
-                        event = event.split("#")
-                        if event[1] == "use":
-                            self.client.deathStats[4] = int(event[2])
-                        else:
-                            self.client.deathStats[4] = 0
-                        self.client.sendDeathInventory(self.client.page)
-
-                if textAreaID == 123480 or textAreaID == 123479:
-                    if event == "next":
-                        if not self.client.page >= 3:
-                            self.client.page += 1
-                            self.client.sendDeathInventory(self.client.page)
-                    else:
-                        if not self.client.page <= 1:
-                            self.client.page -= 1
-                            self.client.sendDeathInventory(self.client.page)
-
                 if textAreaID == 9012:
                     if event == "close":
                         ids = 131458, 123479, 130449, 131459, 123480, 6992, 8002, 23, 9012, 9013, 9893, 8983, 9014, 9894, 8984, 9015, 9895, 8985, 504, 505, 506, 507
@@ -1132,35 +1042,6 @@ class Packets:
                                 self.client.sendPacket([29, 18], ByteArray().writeInt(id).toByteArray())
                             else:
                                 self.client.sendPacket([29, 22], ByteArray().writeInt(id).toByteArray())
-
-                if textAreaID == 20:
-                    if event.startswith("offset"):
-                        event = event.split("#")
-                        if event[1] == "offsetX":
-                            if event[2] == "1":
-                                if not self.client.deathStats[0] >= 25:
-                                    self.client.deathStats[5] += 1
-                                    self.client.deathStats[0] += 1
-                            else:
-                                if not self.client.deathStats[0] <= -25:
-                                    self.client.deathStats[5] -= 1
-                                    self.client.deathStats[0] -= 1
-                        else:
-                            if event[2] == "1":
-                                if not self.client.deathStats[1] >= 25:
-                                    self.client.deathStats[6] += 1
-                                    self.client.deathStats[1] += 1
-                            else:
-                                if not self.client.deathStats[1] <= -25:
-                                    self.client.deathStats[6] -= 1
-                                    self.client.deathStats[1] -= 1
-                    elif event == "show":
-                        if self.client.deathStats[3] == 1:
-                            self.client.deathStats[3] = 0
-                        else:
-                            self.client.deathStats[3] = 1
-                    self.client.sendDeathProfile()
-
                     
                 if event == "closeRanking":
                         i = 30000
@@ -1190,6 +1071,8 @@ class Packets:
                             #self.client.nickColor = "%06X" %(0xFFFFFF & color)
                             #self.client.sendMessage("<font color='"+color+"'>" + "İsminizin rengini başarıyla değiştirdiniz. Yeni renk için sonraki turu bekleyin." if self.client.langue.lower() == "tr" else "You've changed color of your nickname successfully.\nWait next round for your new nickname color." + "</font>")
                 #except: self.client.sendMessage("<ROSE>" + "Renginizi Başarıyla Değiştiniz." if self.client.langue.lower() == "tr" else "Incorrect color, select other one.")
+                if self.client.room.luaRuntime != None:
+                    self.client.room.luaRuntime.emit("ColorPicked", (colorPickerId, color))
                 return
             
         elif C == Identifiers.recv.Cafe.C or C == Identifiers.recv.Moludrome.C:
@@ -1197,7 +1080,7 @@ class Packets:
                 if not self.client.isReloadCafe:
                     self.client.loadCafeMode()
                     self.client.isReloadCafe = True
-                    reactor.callLater(3, setattr, self.client, "isReloadCafe", False)
+                    self.server.loop.call_later(2, setattr, self.client, "isReloadCafe", False)
                 return
 
             elif CC == Identifiers.recv.Cafe.Open_Cafe_Topic:
@@ -1598,6 +1481,15 @@ class Packets:
             elif CC == Identifiers.recv.Others.Warn:
                 self.client.warns()
 
+            elif CC == 10:
+                self.client.room.sendAll([144, 9], ByteArray().writeByte(-1).toByteArray())
+                self.client.room.sendAll([144, 20], ByteArray().writeInt(packet.readInt()).writeInt(1).writeInt(1*1000).toByteArray())
+                return
+            
+            elif CC == 11:
+                self.client.room.sendAll([144, 9], ByteArray().writeByte(-1).toByteArray())
+                return
+
         if self.server.isDebug:
             print("[%s] Packet not implemented - C: %s - CC: %s - packet: %s" %(self.client.playerName, C, CC, repr(packet.toByteArray())))
             with open("./logs/Errors/Debug.log", "a") as f:
@@ -1605,7 +1497,7 @@ class Packets:
             f.close()
                 
 
-    def parsePacketUTF(self, packet):
+    async def parsePacketUTF(self, packet):
         values = packet.split(chr(1))
         C = ord(values[0][0])
         CC = ord(values[0][1])
@@ -1621,7 +1513,7 @@ class Packets:
                 return
 
             elif CC == Identifiers.old.recv.Player.Conjuration:
-                reactor.callLater(10, self.client.sendConjurationDestroy, int(values[0]), int(values[1]))
+                self.server.loop.call_later(10, self.client.sendConjurationDestroy, int(values[0]), int(values[1]))
                 self.client.room.sendAll(Identifiers.old.send.Add_Conjuration, values)
                 return
 
@@ -1776,10 +1668,3 @@ class Packets:
             with open("./logs/Errors/Debug.log", "a") as f:
                 f.write("[%s][OLD] Packet not implemented - C: %s - CC: %s - values: %s\n" %(self.client.playerName, C, CC, repr(values)))
             f.close()
-
-    def descriptPacket(self, packetID, packet):
-        data = ByteArray()
-        while packet.bytesAvailable():
-            packetID = (packetID + 1) % len(self.server.packetKeys)
-            data.writeByte(packet.readByte() ^ self.server.packetKeys[packetID])
-        return data

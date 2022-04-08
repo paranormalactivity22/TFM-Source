@@ -4,17 +4,6 @@ import asyncio
 from ByteArray import ByteArray
 from Identifiers import Identifiers
 
-# Library
-class Reactor1:
-    def __init__(self):
-        self.loop = asyncio.get_event_loop()
-    def callLater(self, *args, **kwargs):
-        return self.loop.call_later(*args, **kwargs)
-    def callFromThread(self, func):
-        return func()
-reactor = Reactor1()
-
-
 class Skills:
     def __init__(self, player, server):
         self.client = player
@@ -147,7 +136,7 @@ class Skills:
                     self.sendShamanSkills(True)
                     self.client.canRedistributeSkills = False
                     if self.client.resSkillsTimer != None: self.client.resSkillsTimer.cancel()
-                    self.client.resSkillsTimer = reactor.callLater(600, setattr, self, "canRedistributeSkills", True)
+                    self.client.resSkillsTimer = self.server.loop.call_later(600, setattr, self, "canRedistributeSkills", True)
                     self.client.totem = [0, ""]
                 else:
                     self.client.sendPacket(Identifiers.send.Redistribute_Error_Time)
@@ -349,7 +338,7 @@ class Skills:
                     if self.checkQualifiedPlayer(px, py, player):
                         self.sendIceMouseSkill(player.playerCode, True)
                 self.client.room.sendAll(Identifiers.send.Skill, chr(79) + chr(1))
-                reactor.callLater(self.client.playerSkills[82] * 2, lambda: self.sendIceMouseSkill(player.playerCode, False))
+                self.server.loop.call_later(self.client.playerSkills[82] * 2, lambda: self.sendIceMouseSkill(player.playerCode, False))
 
         elif code == 81:
             self.sendGravitationalSkill(self.client.playerSkills[63] * 2, 0, 0)

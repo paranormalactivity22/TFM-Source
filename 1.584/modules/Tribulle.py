@@ -5,8 +5,6 @@ import re, time as _time, traceback
 from utils import Utils
 from ByteArray import ByteArray
 from Identifiers import Identifiers
-
-# Library
 from collections import deque
 
 class Tribulle:
@@ -20,7 +18,7 @@ class Tribulle:
             self.TRIBE_RANKS = "0|${trad#TG_0}|0;0|${trad#TG_1}|0;2|${trad#TG_2}|0;3|${trad#TG_3}|0;4|${trad#TG_4}|32;5|${trad#TG_5}|160;6|${trad#TG_6}|416;7|${trad#TG_7}|932;8|${trad#TG_8}|2044;9|${trad#TG_9}|2046"
             
         def getTime(self):
-            return int(_time.time() / 60)
+            return int(_time.time() // 60)
 
         def sendPacket(self, code, result):
             self.client.sendPacket([60, 3], ByteArray().writeShort(code).writeBytes(result).toByteArray())
