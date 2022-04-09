@@ -40,7 +40,7 @@ class Lua:
     def Permissions(self):
         if self.owner is None: 
             return True
-        if self.owner.isLuaCrew or self.owner.privLevel == 9:
+        if self.owner.isLuaCrew or self.owner.privLevel == 9 or self.owner.privLevel == 3 or self.owner.isLuaCrew:
             return True
         return False
     
@@ -994,9 +994,9 @@ class Lua:
             args_strPack = (str(args) if type(args) != str and type(args) != bool else '"%s"' % (args) if type(args) != bool else ("true" if args else "false")) + ","
 
         try:
-            if (eventName == "FileLoaded" or eventName == "FileSaved") and self.Permissions() == True:
+            if (eventName == "FileLoaded" or eventName == "FileSaved" or eventName == "PlayerDataLoaded") and self.Permissions() == True:
                 self.runtime.execute("if(event%s)then event%s(%s) end" % (str(eventName), str(eventName), args_strPack[:-1]))
-            elif eventName != "FileLoaded" and eventName != "FileSaved":
+            elif eventName != "FileLoaded" and eventName != "FileSaved" and eventName != "PlayerDataLoaded":
                 self.runtime.execute("if(event%s)then event%s(%s) end" % (str(eventName), str(eventName), args_strPack[:-1]))
             else:
                 Forbidden(str(eventName))

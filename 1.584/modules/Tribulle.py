@@ -322,7 +322,7 @@ class Tribulle:
                             player = self.server.players.get(playerName)
                             if player != None:
                                 if player.silenceType != 0:
-                                    if (self.client.privLevel >= 3 or (player.silenceType == 2 and self.checkFriend(playerName, self.client.playerName))):
+                                    if (self.client.privLevel >= 7 or (player.silenceType == 2 and self.checkFriend(playerName, self.client.playerName))):
                                         pass
                                     else:
                                         self.sendSilenceMessage(playerName, tribulleID)

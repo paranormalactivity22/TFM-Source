@@ -8,6 +8,7 @@ from utils import Utils
 from ByteArray import ByteArray
 from Identifiers import Identifiers
 from Lua import Lua
+from collections import deque
 
 class Packets:
     def __init__(self, player, server):
@@ -17,11 +18,15 @@ class Packets:
         self.isOpenedHelpCommand = False
 
     async def parsePacket(self, packetID, C, CC, packet):
-        #CC - 26, C - 6
+        #print("C -> " + str(C) + " CC -> " + str(CC) + " Packet -> "+str(packet)+" ID -> "+str(packetID))
         if C == Identifiers.recv.Old_Protocol.C:
             if CC == Identifiers.recv.Old_Protocol.Old_Protocol:
-                data = packet.readUTF()
-                self.client.Packets.parsePacketUTF(data)
+                #data = packet.readUTF()
+                #self.client.Packets.parsePacketUTF(data)
+                data = packet.readUTFBytes(packet.readShort())
+                if isinstance(data, (bytes, bytearray)):
+                    data = data.decode()
+                loop.create_task(self.parsePacketUTF(data))
                 return
 
         elif C == Identifiers.recv.Sync.C:
@@ -401,21 +406,12 @@ class Packets:
             elif CC == Identifiers.recv.Chat.Staff_Chat:
                 type, message = packet.readByte(), packet.readUTF()
                 priv = self.client.privLevel
-                if self.client.isLuaCrew or self.client.isMapCrew or self.client.isFashionSquad or self.client.isFunCorpPlayer:
-                    self.client.sendAllModerationChat(type, message)
-                    return
-                if priv < 2: 
+
+                if priv < 2:
                     return
                 self.client.sendAllModerationChat(type, message)
                 return
                 
-                        
-        # 2: arbitre,
-        # 3: modo,
-        # 7: mapcrew,
-        # 8: luateam,
-        # 9: funcorp,
-        # 10: fashionsquad
 
             elif CC == Identifiers.recv.Chat.Commands:
                 command = packet.readUTF()
@@ -688,11 +684,7 @@ class Packets:
             if CC == Identifiers.recv.Modopwet.Modopwet:
                 if self.client.privLevel >= 7:
                     isOpen = packet.readBoolean()
-                    if isOpen:
-                        self.client.modoPwet.openModoPwet(True)
-                    else:
-                        self.client.modoPwet.openModoPwet(False)
-                        
+                    self.client.modoPwet.openModoPwet(isOpen)
                     self.client.isModoPwet = isOpen    
                 return
 
@@ -832,10 +824,10 @@ class Packets:
                 self.client.sendPacket(Identifiers.send.Captcha, captchas[self.client.currentCaptcha])
                 return
 
-            #elif CC == Identifiers.recv.Login.Player_MS:
+            elif CC == Identifiers.recv.Login.Player_MS:
                 #print('g')
-                #self.client.sendPacket(Identifiers.send.Player_MS)
-                #return
+                self.client.sendPacket(Identifiers.send.Player_MS)
+                return
 
             elif CC == Identifiers.recv.Login.Dummy:
                 if self.client.awakeTimer != None: self.client.awakeTimer.cancel()
@@ -881,6 +873,11 @@ class Packets:
                         with open("./logs/Errors/Debug.log", "a") as f:
                             f.write("[%s] [%s] GameLog Error - C: %s CC: %s error: %s\n" %(_time.strftime("%H:%M:%S"), self.client.playerName, errorC, errorCC, error))
                         f.close()
+                return
+            elif CC == Identifiers.recv.Informations.Player_Ping:
+                VC = (ord(packet.toByteArray()) + 1)
+                if self.client.PInfo[0] == VC:
+                    self.client.PInfo[2] = int(_time.time() - self.client.PInfo[1])
                 return
 
             elif CC == Identifiers.recv.Informations.Change_Shaman_Type:
@@ -946,7 +943,7 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Informations.Request_Info:
-                self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://195.154.124.74/outils/info.php").toByteArray())
+                self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray())
                 return
 
         elif C == Identifiers.recv.Lua.C:
@@ -1055,21 +1052,20 @@ class Packets:
 
             elif CC == Identifiers.recv.Lua.Color_Picked:
                 colorPickerId, color = packet.readInt(), packet.readInt()
-                #try:
-                    #if colorPickerId == 10000:
-                        #if color != -1:
-                            #self.client.nameColor = "%06X" %(0xFFFFFF & color)
-                            #self.client.room.setNameColor(self.client.playerName, color)
-                            #self.client.sendMessage("<font color='"+color+"'>" + "İsminizin rengi başarıyla değiştirildi." if self.client.langue.lower() == "tr" else "You've changed color of your nickname successfully." + "</font>")
-                    #elif colorPickerId == 10001:
-                        #if color != -1:
-                            #self.client.mouseColor = "%06X" %(0xFFFFFF & color)
-                            #self.client.playerLook = "1;%s" %(self.client.playerLook.split(";")[1])
-                            #self.client.sendMessage("<font color='"+color+"'>" + "Farenizin rengini başarıyla değiştirdiniz. Yeni renk için sonraki turu bekleyin." if self.client.langue.lower() == "tr" else "You've changed color of your mouse successfully.\nWait next round for your new mouse color." + "</font>")
-                    #elif colorPickerId == 10002:
-                        #if color != -1:
-                            #self.client.nickColor = "%06X" %(0xFFFFFF & color)
-                            #self.client.sendMessage("<font color='"+color+"'>" + "İsminizin rengini başarıyla değiştirdiniz. Yeni renk için sonraki turu bekleyin." if self.client.langue.lower() == "tr" else "You've changed color of your nickname successfully.\nWait next round for your new nickname color." + "</font>")
+                if colorPickerId == 10000:
+                    if color != -1:
+                        self.client.nameColor = "%06X" %(0xFFFFFF & color)
+                        self.client.room.setNameColor(self.client.playerName, color)
+                        self.client.sendMessage("<font color='"+color+"'>" + "İsminizin rengi başarıyla değiştirildi." if self.client.langue.lower() == "tr" else "You've changed color of your nickname successfully." + "</font>")
+                elif colorPickerId == 10001:
+                    if color != -1:
+                        self.client.mouseColor = "%06X" %(0xFFFFFF & color)
+                        self.client.playerLook = "1;%s" %(self.client.playerLook.split(";")[1])
+                        self.client.sendMessage("<font color='"+color+"'>" + "Farenizin rengini başarıyla değiştirdiniz. Yeni renk için sonraki turu bekleyin." if self.client.langue.lower() == "tr" else "You've changed color of your mouse successfully.\nWait next round for your new mouse color." + "</font>")
+                elif colorPickerId == 10002:
+                    if color != -1:
+                        self.client.nickColor = "%06X" %(0xFFFFFF & color)
+                        self.client.sendMessage("<font color='"+color+"'>" + "İsminizin rengini başarıyla değiştirdiniz. Yeni renk için sonraki turu bekleyin." if self.client.langue.lower() == "tr" else "You've changed color of your nickname successfully.\nWait next round for your new nickname color." + "</font>")
                 #except: self.client.sendMessage("<ROSE>" + "Renginizi Başarıyla Değiştiniz." if self.client.langue.lower() == "tr" else "Incorrect color, select other one.")
                 if self.client.room.luaRuntime != None:
                     self.client.room.luaRuntime.emit("ColorPicked", (colorPickerId, color))

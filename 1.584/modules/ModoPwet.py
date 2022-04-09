@@ -2,7 +2,7 @@
 from utils import Utils
 from ByteArray import ByteArray
 from Identifiers import Identifiers
-import math
+import math, json, time
 
 class ModoPwet:
 
@@ -10,7 +10,18 @@ class ModoPwet:
         self.client = player
         self.server = player.server
         self.isReportedType = ""
+        self.banHours = 0
+        self.lastOpened = time.time()
+        self.loadCache()
 
+    def saveCache(self):
+        with open("./include/json/modopwet.json",'w') as f:
+            f.write(json.dumps(self.server.reports))
+    
+    def loadCache(self):
+        with open("./include/json/modopwet.json",'r') as f:
+            self.server.reports = json.loads(f.read())
+            
     def checkReport(self, array, playerName):
         return playerName in array
 
@@ -61,6 +72,7 @@ class ModoPwet:
         for player in self.server.players.values():
             if player.isModoPwet and player.privLevel >= 7:
                 player.modoPwet.openModoPwet(True)
+        self.saveCache()
 
     def getPlayerRoomName(self, playerName, type):
         player = self.server.players.get(playerName)
@@ -100,8 +112,16 @@ class ModoPwet:
             return "None"
     
     def banHack(self, playerName,iban):
-        if self.server.banPlayer(playerName, 360, "Hack (last warning before account deletion)", self.client.playerName, iban):
-            self.client.sendServerMessage("%s banned the player %s for 360h. Reason: Hack (last warning before account deletion)." %(self.client.playerName, playerName))
+        self.banHours = self.client.AntiCheat.getBans(playerName)
+        if self.banHours == 0:
+            self.banHours = 360
+        else:
+            self.banHours *= 360
+        print(self.banHours)
+        if iban == False:
+            self.server.banPlayer(playerName, self.banHours, "Hack (last warning before account deletion)", self.client.playerName)
+        
+        self.client.sendServerMessage("%s banned the player %s for %sh. Reason: Hack (last warning before account deletion)." %(self.client.playerName, str(self.banHours), playerName))
         self.updateModoPwet()
         
     def deleteReport(self,playerName,handled):
@@ -137,14 +157,19 @@ class ModoPwet:
     
     def openModoPwet(self,isOpen=False,modopwetOnlyPlayerReports=False,sortBy=False):
         if isOpen:
+            if (time.time() - self.lastOpened) < 3:
+                return
+            self.lastOpened = time.time()
             if len(self.server.reports) <= 0:
                 self.client.sendPacket(Identifiers.send.Modopwet_Open, 0)
             else:
-                self.client.sendPacket(Identifiers.send.Modopwet_Open, 0)
+                #self.client.sendPacket(Identifiers.send.Modopwet_Open, 0)
                 reports,bannedList,deletedList,disconnectList = self.sortReports(self.server.reports,sortBy),{},{},[]
                 cnt = 0
                 p = ByteArray()  
+                p.writeByte(len(reports))
                 for i in reports:
+                    print(i)
                     playerName = i[0]
                     v = self.server.reports[playerName]
                     if self.client.modoPwetLangue == 'ALL' or v["language"] == self.client.modoPwetLangue:
@@ -191,7 +216,7 @@ class ModoPwet:
                         if v['state'] == 'disconnected':
                             disconnectList.append(playerName)
 
-                self.client.sendPacket(Identifiers.send.Modopwet_Open, ByteArray().writeByte(int(len(reports))).writeBytes(p.toByteArray()).toByteArray())
+                self.client.sendPacket(Identifiers.send.Modopwet_Open, p.toByteArray())
                 for user in disconnectList:
                     self.changeReportStatusDisconnect(user)
 

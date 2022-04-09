@@ -194,7 +194,7 @@ class Commands:
 
             elif command in ["ping"]:
                 if self.client.privLevel >= 1:
-                    self.client.sendMessage("<V>[•]</V> %s" % (self.client.getPing(self.client.ipAddress)))
+                    self.client.sendMessage("ping ~%s" % str(self.client.PInfo[2]))
 
             elif command in ["pink"]:
                 if self.client.privLevel >= 1:
@@ -733,7 +733,6 @@ class Commands:
                             if self.server.checkConnectedAccount(playerName):
                                 self.client.sendServerMessage("%s banned the player %s for %sh (%s)." %(self.client.playerName, playerName, hours, reason))
                                 self.server.banPlayer(playerName, hours, reason, self.client.playerName)
-                                player.sendPlayerBan(hours, reason)
                             else:
                                 self.client.sendServerMessage("%s offline banned the player %s for %sh (%s)." %(self.client.playerName, playerName, hours, reason))
                                 self.server.banPlayer(playerName, hours, reason, self.client.playerName)
@@ -764,7 +763,7 @@ class Commands:
 
             elif command in ["chatlog"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
-                    self.client.openChatLog(Utils.parsePlayerName(args[0]))
+                    self.client.modoPwet.openChatLog(Utils.parsePlayerName(args[0]))
 
             elif command in ["banhack"]: ########
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -1358,17 +1357,19 @@ class Commands:
                     except:
                         pass
 
-            elif command in ["arb"]: ########
+            elif command in ["arb"]:
                 if self.client.privLevel >= 8 and self.requireArguments(1):
                     player = self.server.players.get(Utils.parsePlayerName(args[0]))
                     if player != None:
                         if self.server.getPlayerPrivlevel(player.playerName) == 7:
                             self.Cursor.execute("UPDATE users SET PrivLevel = 1 WHERE Username = '%s' " % (player.playerName))
+                            player.privLevel = 1
                             player.updateDatabase()
                             self.client.sendServerMessage(player.playerName+" is not arbitre / moderator anymore.")
                             
                         else:
                             self.Cursor.execute("UPDATE users SET PrivLevel = 7 WHERE Username = '%s' " % (player.playerName))
+                            player.privLevel = 7
                             player.updateDatabase()
                             self.client.sendServerMessage("New arbitre : "+player.playerName)
 
@@ -1482,17 +1483,14 @@ class Commands:
                     if player != None:
                         self.client.room.sendAll(Identifiers.send.Add_Frame, ByteArray().writeInt(player.playerCode).writeUTF(frame).writeInt(xPosition).writeInt(yPosition).toByteArray())
 
-            elif command in ["resetprofile"]: ##### NOT WORKING
+            elif command in ["resetprofile"]:
                 if self.client.privLevel >= 9 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
                     player = self.server.players.get(playerName)
                     if player != None:
-                        #self.Cursor.execute("UPDATE Users SET FirstCount = 0, CheeseCount = 0, ShamanSaves = 0, HardModeSaves = 0, DivineModeSaves = 0, BootcampCount = 0, ShamanCheeses = 0, Badges = 0, ShamanLevel = 0, ShamanExp = 0, Consumables = 0  WHERE PlayerID = ?", [self.server.getPlayerID(player.playerName)])
-                        print(self.server.getPlayerID(player.playerName))
-                        print(player.playerName)
-                        self.Cursor.execute("UPDATE users SET FirstCount = 0 WHERE PlayerID = %s", [self.server.getPlayerID(player.playerName)])
+                        self.Cursor.execute(f"UPDATE Users SET FirstCount = 0, CheeseCount = 0, ShamanSaves = 0, HardModeSaves = 0, DivineModeSaves = 0, BootcampCount = 0, ShamanCheeses = 0, Badges = 0, ShamanLevel = 0, ShamanExp = 0, Consumables = '', Pet = '', ShamanBadges = '', Badges = '{'{}'}', Karma = 0, ShopCheeses = 0, ShopFraises = 0  WHERE PlayerID = {self.server.getPlayerID(player.playerName)}")
                         self.client.sendServerMessageAdmin(self.client.playerName + " reseted the profile of the player " + playerName + "<BL>.")
-                        player.updateDatabase()
+                        #player.updateDatabase()
                         player.room.removeClient(player)
                         player.transport.close()
                     else:
@@ -1629,23 +1627,20 @@ class Commands:
                     except:
                         self.client.sendMessage("<V>[•]</V> Failed reload all modules.")
                         
-            elif command in ["changepassword"]: #####
-                #if self.client.playerName in self.owners:
-                if len(args) == 2:
+            elif command in ["changepassword"]:
+                if self.client.playerName in self.owners and self.requireArguments(2):
                     playerName = Utils.parsePlayerName(args[0])
                     password = args[1]
-                    if self.server.checkExistingUser(playerName):
-                        salt = "\xf7\x1a\xa6\xde\x8f\x17v\xa8\x03\x9d2\xb8\xa1V\xb2\xa9>\xddC\x9d\xc5\xdd\xceV\xd3\xb7\xa4\x05J\r\x08\xb0"
-                        hashtext = hashlib.sha256(str(hashlib.sha256(password.encode('utf-8')).hexdigest() + salt.encode('utf-8'))).digest()
-                        #passhash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-                        #hashtext = hashlib.sha256(passhash.encode('utf-8') + salt.encode('utf-8')).digest()
-                        #self.Cursor.execute("update Users set Password = %s where Username = %s", [base64.b64encode(hashtext), playerName])
-                        #self.client.sendServerMessageAdmin("The player %s changed password of <ROSE>%s</ROSE> " %(self.client.playerName, playerName))
-                        self.client.sendMessage(hashtext)
+                    player = self.server.players.get(playerName)
+                    if player != None:
+                        salt = b'\xf7\x1a\xa6\xde\x8f\x17v\xa8\x03\x9d2\xb8\xa1V\xb2\xa9>\xddC\x9d\xc5\xdd\xceV\xd3\xb7\xa4\x05J\r\x08\xb0'
+                        hashtext = base64.b64encode(hashlib.sha256(hashlib.sha256(password.encode()).hexdigest().encode() + salt).digest()).decode()
+                        player.updateDatabase()
+                        self.Cursor.execute(f"UPDATE Users SET Password = '{hashtext}' WHERE Username = '{playerName}'")
+                        player.room.removeClient(player)
+                        player.transport.close()
                     else:
                         self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
-                else:
-                    self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
          
             elif command in ["colormouse"]:
                 if(self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName.lower() or self.client.isFuncorpPlayer == True) and self.requireArguments(1):
@@ -1655,6 +1650,18 @@ class Commands:
                         if player != None:
                             if playerName != "*":
                                 self.client.room.showColorPicker(10001, playerName, int(player.mouseColor, 16), "Select a color for your mouse body.")
+                            #for player in self.client.room.clients.values():
+                    else:
+                        self.client.sendMessage("<V>[•]</V> FunCorp commands only work when the room is in FunCorp mode.")
+                        
+            elif command in ["colornick"]:
+                if(self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName.lower() or self.client.isFuncorpPlayer == True) and self.requireArguments(1):
+                    if self.client.room.isFuncorp:
+                        playerName = Utils.parsePlayerName(args[0])
+                        player = self.server.players.get(playerName)
+                        if player != None:
+                            if playerName != "*":
+                                self.client.room.showColorPicker(10000, playerName, int(player.mouseColor, 16), "Select a color for your name.")
                             #for player in self.client.room.clients.values():
                     else:
                         self.client.sendMessage("<V>[•]</V> FunCorp commands only work when the room is in FunCorp mode.")

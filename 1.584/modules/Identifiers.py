@@ -258,6 +258,7 @@ class Identifiers:
             Login = 8
             Player_FPS = 13
             Captcha = 20
+            Player_MS = 25
             Dummy = 26
             Player_Info = 28
             Player_Info2 = 29
