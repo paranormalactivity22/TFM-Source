@@ -184,6 +184,7 @@ class Client:
         self.isPrisoned = False
         self.hasLuaTransformations = False
         self.lastping = False
+        self.canChangeMission = True
         
         # Staff Positions
         self.isLuaCrew = False
@@ -1923,7 +1924,7 @@ class Client:
             self.CursorCafe.execute("select count(*) as count from cafeposts where TopicID = ? and Status = 0", [s])
             return int(self.CursorCafe.fetchone()["count"])
 
-    def openCafeTopic(self, topicID):
+    def openCafeTopic(self, topicID, state=1):
         if self.server.cafeModeration:
             packet = ByteArray().writeBoolean(1).writeInt(topicID).writeBoolean(self.check(topicID) != 0).writeBoolean(not self.isGuest)
         else:
@@ -1980,17 +1981,20 @@ class Client:
         if rs:
             points = rs["Points"]
             votes = rs["Votes"]
-
-        votes += str(self.playerID) if votes == "" else "," + str(self.playerID)
-        if mode:
-            points += 1
-        else:
-            points -= 1
-
-        self.CursorCafe.execute("update cafeposts set Points = ?, Votes = ? where TopicID = ? and PostID = ?", [points, votes, topicID, postID])
-        self.updateDatabase()
+            
+        if not str(self.playerID) in votes:
+            votes += str(self.playerID) if votes == "" else "," + str(self.playerID)
         
-        self.openCafeTopic(topicID)
+            if mode:
+                points += 1
+            else:
+                points -= 1
+
+            self.CursorCafe.execute("update cafeposts set Points = ?, Votes = ? where TopicID = ? and PostID = ?", [points, votes, topicID, postID])
+            self.updateDatabase()
+            self.openCafeTopic(topicID)
+        else:
+            pass
 
     def deleteCafePost(self, topicID, postID):
         self.CursorCafe.execute("delete from cafeposts where TopicID = ? and PostID = ?", [topicID, postID])
@@ -3658,9 +3662,6 @@ class Room:
             if self.mapPerma in [7, 17, 42, 11]:
                 self.isNoShamanMap = True
 
-            if self.isSurvivor and self.mapPerma in [11]:
-                self.server.loop.call_later(5, self.sendVampireMode)
-
             if self.currentMap in [108, 109, 110, 111, 112, 113, 170, 171]:
                 self.catchTheCheeseMap = True
 
@@ -3735,6 +3736,10 @@ class Room:
             self.killAfkTimer = self.server.loop.call_later(30, self.killAfk)
             if self.autoRespawn or self.isTribeHouseMap:
                 self.autoRespawnTimer = self.server.loop.call_later(2, self.respawnMice)
+                
+            if self.mapPerma == 11 and self.isSurvivor and self.roomName.find("survivor") != -1:
+                self.server.loop.call_later(5, self.sendVampireMode)
+                
         if self.luaRuntime != None:
             self.luaRuntime.emit("newGame", self.currentMap)
 
