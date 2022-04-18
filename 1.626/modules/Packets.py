@@ -469,11 +469,11 @@ class Packets:
                     self.client.room.luaRuntime.emit("EmotePlayed", (self.client.playerName, emoteID))
                 return
                     
-            elif CC == Identifiers.recv.Player.Langue:
-                self.client.langueID = packet.readByte()
-                langue = Utils.getTFMLangues(self.client.langueID)
-                self.client.langue = langue
-                return
+            #elif CC == Identifiers.recv.Player.Langue:
+                #self.client.langueID = packet.readByte()
+                #langue = Utils.getTFMLangues(self.client.langueID)
+                #self.client.langue = langue
+                #return
 
             elif CC == Identifiers.recv.Player.Emotions:
                 emotion = packet.readByte()
@@ -739,7 +739,7 @@ class Packets:
                 if self.client.checkTimeAccount():
                     createTime = _time.time() - self.client.CRTTime
                     if createTime < 5.2:
-                        self.server.sendStaffMessage(7, "[<V>#</V>] The ip <J>"+self.client.ipAddress+"</J> is creating so fast accounts <FC><a href='banip:"+str(self.client.ipAddress)+"'>Suspect</a></FC>'")
+                        self.server.sendStaffMessage(7, "[<V>#</V>] The ip <J>"+self.client.ipAddress+"</J> is creating so fast accounts <FC><a event='banip:"+str(self.client.ipAddress)+"'>Suspect</a></FC>'")
                         self.client.transport.close()
                         return
                     

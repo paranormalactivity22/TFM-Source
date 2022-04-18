@@ -169,28 +169,30 @@ class Missions:
             return self.client.playerMissions[missionID]
 
     def changeMission(self, missionID):
-        missionID = str(missionID)
-        mission = self.randomMission(True)
-        
-        i = 0
-        while missionID == int(mission[0]):
+        if self.client.canChangeMission:
+            missionID = str(missionID)
             mission = self.randomMission(True)
-            i += 1
-            if i > 21:
-                break
-                
-        if i <= 21:
-            self.client.playerMissions[mission[0]] = [mission[0], mission[1], mission[2], mission[3], mission[4], True if 10 > i else False]
             
+            i = 0
+            while missionID == int(mission[0]):
+                mission = self.randomMission(True)
+                i += 1
+                if i > 21:
+                    break
+                    
+            if i <= 21:
+                self.client.playerMissions[mission[0]] = [mission[0], mission[1], mission[2], mission[3], mission[4], True if 10 > i else False]
+                
 
-        if missionID in self.client.playerMissions:
-            del self.client.playerMissions[missionID]
+            if missionID in self.client.playerMissions:
+                del self.client.playerMissions[missionID]
 
-        """for id, mission in self.client.playerMissions.items():
-            mission[5] = False"""
-        self.sendMissions()
+            """for id, mission in self.client.playerMissions.items():
+                mission[5] = False"""
+            self.sendMissions()
 
-        self.updateMissions(True)
+            self.updateMissions(True)
+            self.client.canChangeMission = False
 
     def upMission(self, missionID, args=1):
         if missionID in self.client.playerMissions:
@@ -248,6 +250,4 @@ class Missions:
         p.writeShort(20)
         p.writeInt(20)
         p.writeBoolean(False) # Substituir missão
-
-                
         self.client.sendPacket(Identifiers.send.Send_Missions, p.toByteArray())
