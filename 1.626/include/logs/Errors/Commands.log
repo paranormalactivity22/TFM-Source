@@ -1,0 +1,20 @@
+
+============================================================
+- Time: 16/04/2022 - 07:43:53
+- Name: Chatta
+- Error Command: 
+Traceback (most recent call last):
+  File "C:\Users\believix\Desktop\1.584\modules\ParseCommands.py", line 849, in parseCommand
+    message += "<p align='left'><V>[%s]</V> <BL>%s ( <font color = '%s'>%s</font> - %s ) %s - %s</BL><br>" % (playerName, str(rs[1]), self.client.ipColor(self.client.TFMIPDEC(rs[0])), rs[0], self.client.getCountryIP(rs[0]), rs[3], rs[2])
+AttributeError: 'Client' object has no attribute 'getCountryIP'
+
+============================================================
+- Time: 16/04/2022 - 08:00:20
+- Name: Chatta
+- Error Command: 
+Traceback (most recent call last):
+  File "C:\Users\believix\Desktop\1.584\modules\ParseCommands.py", line 767, in parseCommand
+    self.client.modoPwet.openChatLog(Utils.parsePlayerName(args[0]))
+  File "C:\Users\believix\Desktop\1.584\modules\ModoPwet.py", line 237, in openChatLog
+    packet = ByteArray().writeUTF(playerName).WriteUTF(self.getPlayerRoomName(playerName)).writeByte(len(self.server.chatMessages[playerName]))
+AttributeError: 'ByteArray' object has no attribute 'WriteUTF'
