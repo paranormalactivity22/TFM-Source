@@ -24,6 +24,13 @@ class ByteArray:
     def writeUnsignedInt(self, value):
         return self.writeInt(value)
     
+    def readBytes(self, write, _from, to):
+        write.writeBytes(self.read(to+_from)[_from:])
+        return write
+        
+    def clear(self):
+        self.bytes = b""
+    
     def readUnsignedByte(self):
         return self.readByte()
     
@@ -121,7 +128,7 @@ class ByteArray:
         return len(self.bytes)
 
     def bytesAvailable(self):
-        return self.getLength() > 0
+        return self.getLength()
     
     def compute_keys(self, keys, keyword):
         nbr = 5381

@@ -3,6 +3,11 @@ import re, sys, json, os, base64, hashlib, time, random, traceback, asyncio, ast
 """
 9 Admin, 8 Mod, 7 Arb, 6 MC, 5 FC, 4 LC, 3 - FS, 2 Sentinel, 1 PPL
 Commands: /relation, /arb, /resign, /sondage
+
+./tag [tag] [mapcode] [description] : Adds a tag to a map, or removes it if the map already had it
+
+[•] Smin0fre has ninja'd the player Smin0fre.
+[•] The player Tinitte hasn't logged in since the last reboot.
 """
 # Modules
 from time import gmtime, strftime
@@ -28,6 +33,13 @@ class Exceptions:
             self.client.sendMessage("<V>[•]</V> You need more arguments to use this command.")
         elif name == "requireFC":
             self.client.sendMessage("<V>[•]</V> FunCorp commands only work when the room is in FunCorp mode.")
+        elif name == "unknownuserorip":
+            self.client.sendMessage("<V>[•]</V> The supplied argument is neither a valid nickname nor an IP address.")
+        #elif name == "usernotbanned":
+        #elif name == "usernotmuted":
+        #elif name == "useralreadybanned":
+        #elif name == "useralreadymuted":
+            
     def to_int(self, s):
         try:
             return ast.literal_eval(s)
@@ -755,6 +767,7 @@ class Commands:
                             found = True
                         if found:
                             import time
+                            self.client.modoPwet.removeCache(self.client.playerName, {"bannedby", "banhours", "banreason"})
                             self.Cursor.execute("insert into BanLog values (%s, %s, '', '', %s, 'Unban', '')", [playerName, self.client.playerName, int(str(time.time())[:9])])
                             self.client.sendServerMessage("%s unbanned the player %s." %(self.client.playerName, playerName))
                             self.server.saveCasier(playerName, "UNBAN", modName, "", "")
@@ -879,12 +892,15 @@ class Commands:
                             self.server.removeModMute(playerName)
                             self.client.isMute = False
                             self.server.saveCasier(playerName, "UNMUTE", modName, "", "")
+                            self.server.reports[self.client.playerName]['isMuted'] = False
+                            self.client.modoPwet.reloadCache(self.client.playerName, {"isMuted":"False"})
+                            self.client.modoPwet.removeCache(self.client.playerName, {"mutedBy", "muteHours", "muteReason"})
                         else:
                             self.Ex.Invoke("usernotmuted")
                     else:
                         self.Ex.Invoke("unknownuser")
 
-            elif command in ["l"]:
+            elif command in ["l"]: ########
                 if self.client.privLevel >= 7:
                     playerName = self.client.playerName if len(args) == 0 else "" if "." in args[0] else Utils.parsePlayerName(args[0])
                     ip = args[0] if len(args) != 0 and "." in args[0] else ""
@@ -923,7 +939,7 @@ class Commands:
                     else:
                         self.Ex.Invoke("unknownuser")
 
-            elif command in ["ninja"]:
+            elif command in ["ninja"]: ########
                 if self.client.privLevel >= 7 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
                     player = self.server.players.get(playerName)
@@ -946,7 +962,6 @@ class Commands:
                         self.client.sendMessage("<V>[•]</V> <BV>%s</BV> -> <font color = '%s'>%s</font>" %(playerName, self.client.ipColor(player.ipAddress), self.client.TFMIP(player.ipAddress)))
                     else:
                         self.Ex.Invoke("unknownuser")
-            
             
             elif command in ["kick"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -1113,7 +1128,7 @@ class Commands:
                     else:
                         self.client.sendMessage(f"<V>[•]</V> The community <J>{commu}</J> is invalid.")
 
-            elif command in ["casier"]:
+            elif command in ["casier"]: ########
                 if self.client.privLevel >= 7 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
                     player = self.server.players.get(playerName)
@@ -1158,7 +1173,7 @@ class Commands:
                     else:
                         pass
                                     
-            elif command in ["lsroom"]:
+            elif command in ["lsroom"]: ########
                 if self.client.privLevel >= 7:
                     if len(args) == 0:
                         Message = "<V>[•]</V> Players in room ["+str(self.client.roomName[:2].lower() + self.client.roomName[2:])+"]: "+str(self.client.room.getPlayerCount())+"\n"
@@ -1199,7 +1214,7 @@ class Commands:
                     else:
                         self.client.sendMessage("<V>[•]</V> The IP isn't banned.")
                             
-            elif command in ["ls"]:
+            elif command in ["ls"]: ########
                 if self.client.privLevel >= 7:
                     if len(args) >= 1:
                         roomNAME = argsNotSplited.split(" ", 0)[0] if (len(args) >= 1) else ""
@@ -1350,15 +1365,6 @@ class Commands:
                 if self.client.privLevel >= 8:
                     self.client.room.sendAll(Identifiers.send.Message, ByteArray().writeUTF("\n" * 10000).toByteArray())
 
-            elif command in ["playerping"]:
-                if self.client.privLevel >= 8 and self.requireArguments(1):
-                    playerName = Utils.parsePlayerName(args[0])
-                    player = self.server.players.get(playerName)
-                    if player != None:
-                        self.client.sendMessage("<V>[•]</V> <V>%s</V> -> %s" %(playerName, self.client.getPing(player.ipAddress)))
-                    else:
-                        self.client.sendMessage("<V>[•]</V> The supplied argument isn't a valid nickname.")
-
             elif command in ["moveplayer"]:
                 if self.client.privLevel >= 8 and self.requireArguments(2):
                     playerName = Utils.parsePlayerName(args[0])
@@ -1390,7 +1396,7 @@ class Commands:
                     except:
                         pass
 
-            elif command in ["arb"]:
+            elif command in ["arb"]: ########
                 if self.client.privLevel >= 8 and self.requireArguments(1):
                     player = self.server.players.get(Utils.parsePlayerName(args[0]))
                     if player != None:
@@ -1417,7 +1423,7 @@ class Commands:
                     for player in [*self.client.room.clients.values()]:
                         player.enterRoom(argsNotSplited)
 
-            elif command in ["updatesql"]:
+            elif command in ["updatesql"]: ########
                 if self.client.privLevel >= 9:
                     for player in self.server.players.values():
                         player.updateDatabase()
@@ -1430,24 +1436,16 @@ class Commands:
 
             elif command in ["re","respawn"]:
                 if self.client.privLevel >= 9:
-                    if len(args) == 0:
-                        if not self.client.canRespawn:
-                            self.client.room.respawnSpecific(self.client.playerName)
-                            self.client.canRespawn = True
-                            self.client.sendMessage("<V>[•]</V> Successfull respawned yourself.")
-                    elif len(args) == 1:
-                        playerName = Utils.parsePlayerName(args[0])
-                        if playerName in self.client.room.clients:
-                            self.client.room.respawnSpecific(playerName)
-                            self.client.sendMessage("<V>[•]</V> Successfull respawned "+str(playerName)+".")
-                    else:
-                        pass
+                    playerName = Utils.parsePlayerName(args[0])
+                    if playerName in self.client.room.clients:
+                        self.client.room.respawnSpecific(playerName)
+                        self.client.sendMessage("<V>[•]</V> Successfull respawned "+str(playerName)+".")
 
-            elif command in ["settime"]:
+            elif command in ["settime"]: ########
                 if self.client.privLevel >= 9 and self.requireArguments(1):
                     time = args[0]
                     iTime = int(time)
-                    iTime = 5 if iTime < 5 else (32767 if iTime > 32767 else iTime)
+                    #iTime = 5 if iTime < 5 else (32767 if iTime > 32767 else iTime)
                     for player in self.client.room.clients.values():
                         player.sendRoundTime(iTime)
                     self.client.room.changeMapTimers(iTime)
@@ -1492,25 +1490,6 @@ class Commands:
                         message += "<p align='left'><V>[%s]</V> <FC> - </FC><VP>use command:</VP> <V>/%s</V> <FC> ~> </FC><VP>[%s]\n" % (nick,command,d)
                     self.client.sendLogMessage(message)
 
-            elif command in ["anim"]:
-                if self.client.privLevel >= 9 and self.requireArguments(3):
-                    playerName = Utils.parsePlayerName(args[0])
-                    anim = args[1]
-                    frame = int(args[2])
-                    player = self.client.room.clients.get(playerName)
-                    if player != None:
-                        self.client.room.sendAll(Identifiers.send.Add_Anim, ByteArray().writeInt(player.playerCode).writeUTF(anim).writeShort(frame).toByteArray())
-
-            elif command in ["frame"]:
-                if self.client.privLevel >= 9 and self.requireArguments(4):
-                    playerName = Utils.parsePlayerName(args[0])
-                    frame = args[1]
-                    xPosition = int(args[2])
-                    yPosition = int(args[3])
-                    player = self.client.room.clients.get(playerName)
-                    if player != None:
-                        self.client.room.sendAll(Identifiers.send.Add_Frame, ByteArray().writeInt(player.playerCode).writeUTF(frame).writeInt(xPosition).writeInt(yPosition).toByteArray())
-
             elif command in ["resetprofile"]:
                 if self.client.privLevel >= 9 and self.requireArguments(1):
                     playerName = Utils.parsePlayerName(args[0])
@@ -1518,7 +1497,6 @@ class Commands:
                     if player != None:
                         self.Cursor.execute(f"UPDATE Users SET FirstCount = 0, CheeseCount = 0, ShamanSaves = 0, HardModeSaves = 0, DivineModeSaves = 0, BootcampCount = 0, ShamanCheeses = 0, Badges = 0, ShamanLevel = 0, ShamanExp = 0, Consumables = '', Pet = '', ShamanBadges = '', Badges = '{'{}'}', Karma = 0, ShopCheeses = 0, ShopFraises = 0  WHERE PlayerID = {self.server.getPlayerID(player.playerName)}")
                         self.client.sendServerMessageAdmin(self.client.playerName + " reseted the profile of the player " + playerName + "<BL>.")
-                        #player.updateDatabase()
                         player.room.removeClient(player)
                         player.transport.close()
                     else:
@@ -1573,7 +1551,7 @@ class Commands:
                 if self.client.playerName in self.owners:
                     self.server.sendServerRestart(0, 0)
                     
-            elif command in ["clearlogs"]:
+            elif command in ["clearlogs"]:  ############
                 if self.client.playerName in self.owners and self.requireArguments(1):
                     if args[0] == "reports":
                         self.server.reports = {}
@@ -1603,7 +1581,7 @@ class Commands:
                 if self.client.playerName in self.owners:
                     self.server.closeServer()
 
-            elif command in ["viewlog"]:
+            elif command in ["viewlog"]: ############
                 if self.client.playerName in self.owners and self.requireArguments(1):
                     if args[0] == "errors":
                         with open("./include/logs/Errors/Tribulle.log", 'r') as File:
@@ -1640,20 +1618,16 @@ class Commands:
 
             elif command in ["reset"]:
                 if self.client.playerName in self.owners and self.requireArguments(1):
-                    if args[0] == "fastracing":
-                        self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ?", [0, "", 0])
-                        self.client.sendServerMessageAdmin("All records of fastracing was deleted by %s."%(self.client.playerName))
-                    elif args[0] == "deathcounts":
-                        self.Cursor.execute("update Users set deathCount = %s", [0])
-                        self.client.sendServerMessageAdmin("<V>[•]</V> All deathcounts was reset by %s."%(self.client.playerName)) 
+                    self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ?", [0, "", 0])
+                    self.client.sendServerMessageAdmin("All records of fastracing was deleted by %s."%(self.client.playerName))
 
             elif command in ["reload"]:
-                #if self.client.playerName in self.owners:
-                try:
-                    self.server.reloadServer()
-                    self.client.sendMessage("<V>[•]</V> Successfull reloaded all modules.")
-                except:
-                    self.client.sendMessage("<V>[•]</V> Failed reload all modules.")
+                if self.client.playerName in self.owners:
+                    try:
+                        self.server.reloadServer()
+                        self.client.sendMessage("<V>[•]</V> Successfull reloaded all modules.")
+                    except:
+                        self.client.sendMessage("<V>[•]</V> Failed reload all modules.")
                         
             elif command in ["changepassword"]:
                 if self.client.playerName in self.owners and self.requireArguments(2):

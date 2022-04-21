@@ -191,15 +191,7 @@ class Packets:
                     self.client.sendPlaceObject(objectID, code, px, py, angle, vx, vy, dur, False)
                     self.client.Skills.placeSkill(objectID, code, px, py, angle)
                 if self.client.room.luaRuntime != None:
-                    data = self.client.room.luaRuntime.runtime.eval("{}")
-                    data["id"] = objectID
-                    data["type"] = code
-                    data["x"] = px
-                    data["y"] = py
-                    data["angle"] = angle
-                    data["ghost"] = not dur
-                    self.client.room.luaRuntime.emit("SummoningEnd", (self.client.playerName, code, px, py, angle, vx, vy, data))
-
+                    self.client.room.luaRuntime.emit("SummoningEnd", (self.client.playerName, code, px, py, angle, vx, vy, not dur))
                 return
 
             elif CC == Identifiers.recv.Room.Ice_Cube:
@@ -289,7 +281,6 @@ class Packets:
             elif CC == Identifiers.recv.Room.Send_Music:
                 url = packet.readUTF()
                 id = Utils.getYoutubeID(url)
-                print(id)
                 if (id == None):
                     self.client.sendLangueMessage("", "$ModeMusic_ErreurVideo")
                 else:
@@ -364,6 +355,9 @@ class Packets:
                         timeCalc = Utils.getHoursDiff(muteInfo[1])          
                         if timeCalc <= 0:
                             self.client.isMute = False
+                            self.server.reports[self.client.playerName]['isMuted'] = False
+                            self.client.modoPwet.reloadCache(self.client.playerName, {"isMuted":"False"})
+                            self.client.modoPwet.removeCache(self.client.playerName, {"mutedBy", "muteHours", "muteReason"})
                             self.server.removeModMute(self.client.playerName)
                             if self.client.isMumute:
                                 self.client.room.sendAllChat(self.client.playerCode, self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, self.client.langueID, 2)
@@ -701,9 +695,11 @@ class Packets:
                             self.client.isHidden = True
                             self.client.sendPlayerDisconnect()
                             self.client.isDead = True
-                            self.client.startBulle(roomName)
+                            self.client.enterRoom(roomName)
                             self.client.sendPacket(Identifiers.send.Watch, ByteArray().writeUTF(playerName).writeBoolean(True).toByteArray())
                             self.server.players[playerName].followed = self.client
+                            self.server.players[playerName].isFollowing = True
+                            self.server.players[playerName].modopwetwatchers.append(self.client.playerName)
                 return
 
             elif CC == Identifiers.recv.Modopwet.Ban_Hack:
@@ -862,7 +858,7 @@ class Packets:
                             f.write("[%s] [%s][OLD] GameLog Error - C: %s CC: %s error: %s\n" %(_time.strftime("%H:%M:%S"), self.client.playerName, oldC, oldCC, error))
                         f.close()
                     elif errorC == 60 and errorCC == 1:
-                        if oldC == Identifiers.tribulle.send.ET_SignaleDepartMembre or oldC == Identifiers.tribulle.send.ET_SignaleExclusion: return
+                        #if oldC == Identifiers.tribulle.send.ET_SignaleDepartMembre or oldC == Identifiers.tribulle.send.ET_SignaleExclusion: return
                         print("[%s] [%s][TRIBULLE] GameLog Error - Code: %s error: %s" %(_time.strftime("%H:%M:%S"), self.client.playerName, oldC, error))
                         with open("./include/logs/Errors/Debug.log", "a") as f:
                             f.write("[%s] [%s][TRIBULLE] GameLog Error - Code: %s error: %s\n" %(_time.strftime("%H:%M:%S"), self.client.playerName, oldC, error))
@@ -882,7 +878,7 @@ class Packets:
             elif CC == Identifiers.recv.Informations.Change_Shaman_Type:
                 type = packet.readByte()
                 self.client.shamanType = type
-                self.client.sendShamanType(type, (self.client.shamanSaves >= 100 and self.client.hardModeSaves >= 150))
+                self.client.sendShamanType(type, (self.client.shamanSaves >= self.server.minimumNormalSaves and self.client.hardModeSaves >= self.server.minimumHardSaves))
                 return
 
             elif CC == Identifiers.recv.Informations.Letter:

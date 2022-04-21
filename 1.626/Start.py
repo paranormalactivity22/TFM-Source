@@ -19,8 +19,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))
 class Client:
     def __init__(self, _server):
 
+        self.data_offset = 0
+        self.data_len = 0
+        self.read_data = False
+
         # String
         self.langue = ""
+        self.socket = ByteArray()
+        self.socket_data = ByteArray()
         self.loop = asyncio.new_event_loop()
         self.server = _server
         self.packages = ByteArray()
@@ -130,6 +136,8 @@ class Client:
         self.lastTopicID = 0
         self.currentPost = 0
         self.dac = 0
+        self.tribulleID = 0
+        self.data_id = 0
 
         # Bool
         self.isLuaAdmin = False
@@ -185,6 +193,7 @@ class Client:
         self.hasLuaTransformations = False
         self.lastping = False
         self.canChangeMission = True
+        self.isFollowing = False
         
         # Staff Positions
         self.isLuaCrew = False
@@ -238,6 +247,7 @@ class Client:
         self.custom = []
         self.visuDone = []
         self.visusRemove = []
+        self.modopwetwatchers = []
 
         # Dict
         self.shopBadges = {}
@@ -246,6 +256,7 @@ class Client:
         self.playerConsumables = {}
         self.playerMissions = {}
         self.itensBots = {"Papaille": [(4, 800, 50, 4, 2253, 50), (4, 800, 50, 4, 2254, 50), (4, 800, 50, 4, 2257, 50), (4, 800, 50, 4, 2260, 50), (4, 800, 50, 4, 2261, 50)], "Santa Claus": [(1, 34, 1, 4, 2254, 100), (1, 174, 1, 4, 2254, 100), (4, 6, 50, 4, 2253, 50), (3, 312, 1, 4, 2253, 50)], "Easter Chappie": [(1, 65, 1, 4, 2254, 100), (1, 64, 1, 4, 2254, 100), (1, 170, 1, 4, 2254, 100), (4, 6, 50, 4, 2254, 100), (3, 426, 1, 4, 2254, 100)], "Buffy": [(1, 147, 1, 4, 2254, 200), (2, 17, 1, 4, 2254, 150), (2, 18, 1, 4, 2254, 150), (2, 19, 1, 4, 2254, 150), (3, 398, 1, 4, 2254, 150), (3, 392, 1, 4, 2254, 50)], "Indiana Mouse": [(3, 255, 1, 4, 2257, 50), (3, 394, 1, 4, 2257, 50), (3, 395, 1, 4, 2257, 50), (3, 320, 1, 4, 2257, 50), (3, 393, 1, 4, 2257, 50), (3, 402, 1, 4, 2257, 50), (3, 397, 1, 4, 2257, 50), (3, 341, 1, 4, 2257, 50), (3, 335, 1, 4, 2257, 25), (3, 403, 1, 4, 2257, 50), (1, 6, 1, 4, 2257, 50), (1, 17, 1, 4, 2257, 50)], "Elise": [(4, 31, 2, 4, 2261, 5), (4, 2256, 2, 4, 2261, 5), (4, 2232, 2, 4, 2253, 1), (4, 21, 5, 4, 2253, 1), (4, 33, 2, 4, 2260, 1), (4, 33, 2, 4, 2254, 1)], "Oracle": [(1, 145, 1, 4, 2253, 200), (2, 16, 1, 4, 2253, 150), (2, 21, 1, 4, 2253, 150), (2, 24, 1, 4, 2253, 150), (2, 20, 1, 4, 2253, 150), (3, 390, 1, 4, 2253, 50), (3, 391, 1, 4, 2253, 200), (3, 399, 1, 4, 2253, 150)], "Prof": [(4, 800, 20, 4, 2257, 10), (4, 19, 2, 4, 2257, 5), (4, 2258, 2, 4, 2257, 4), (4, 2262, 5, 4, 2257, 2), (4, 2259, 10, 4, 2257, 1), (4, 20, 1, 4, 2257, 2)], "Cassidy": [(1, 154, 1, 4, 2261, 200), (2, 23, 1, 4, 2261, 150), (3, 400, 1, 4, 2261, 100)], "Von Drekkemouse": [(2, 22, 1, 4, 2260, 150), (1, 153, 1, 4, 2260, 200), (3, 401, 1, 4, 2260, 100)], "Tod": [(4, 2259, 10, 4, 2257, 1), (4, 2258, 10, 4, 2254, 230), (3, 401, 1, 4, 2260, 100)], "Fishing2017": [(1, 184, 1, 4, 2257, 200), (2, 24, 1, 4, 2257, 150), (2, 29, 1, 4, 2257, 150), (3, 422, 1, 4, 2257, 200)]}
+        self.tribeInfo = ["", "", 0, "", ""]
     
     def eof_received(self):
         pass
@@ -261,25 +272,51 @@ class Client:
             if not ((var_56 & 128) == 128 and var_2053 < 5):
                 return var_2068+1, var_2053
 
+    # def data_received(self, data):
+        # if data == b'<policy-file-request/>\x00':
+            # self.transport.write(b'<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\"/></cross-domain-policy>\x00')
+            # self.transport.close()
+            # return
+        
+        # self.packages.write(data)
+        # oldpacket = self.packages.copy()
+        # while self.packages.getLength() > 0:
+            # length, lenlen = self.getnewlen(self.packages)
+            # if self.packages.getLength() >= length:
+                # read = ByteArray(self.packages.bytes[:length])
+                # oldpacket.bytes = oldpacket.bytes[length:]
+                # self.packages.bytes = self.packages.bytes[length:]
+                # loop.create_task(self.parseString(read))
+            # else:
+                # self.packages = oldpacket
+                # break
+
     def data_received(self, data):
         if data == b'<policy-file-request/>\x00':
             self.transport.write(b'<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\"/></cross-domain-policy>\x00')
             self.transport.close()
             return
-        
-        self.packages.write(data)
-        oldpacket = self.packages.copy()
-        while self.packages.getLength() > 0:
-            length, lenlen = self.getnewlen(self.packages)
-            if self.packages.getLength() >= length:
-                read = ByteArray(self.packages.bytes[:length])
-                oldpacket.bytes = oldpacket.bytes[length:]
-                self.packages.bytes = self.packages.bytes[length:]
-                loop.create_task(self.parseString(read))
-            else:
-                self.packages = oldpacket
-                break
-
+        if data: self.socket.bytes += data
+            
+        if (not self.read_data):
+            _code = 128
+            while ((_code & 128) and self.data_offset < 5):
+                if (not self.socket.bytes): return
+                _code = (self.socket.readByte() & 0xFF)
+                self.data_len |= (_code & 127) << (self.data_offset * 7)
+                self.data_offset += 1
+            self.read_data = True
+            
+        if (self.read_data and (len(self.socket.bytes) >= self.data_len+1)):
+            self.socket_data.clear()       
+            self.socket.readBytes(self.socket_data,0,self.data_len+1)
+            #self.parseString(self.socket_data)
+            loop.create_task(self.parseString(self.socket_data))
+            self.data_len = 0
+            self.data_offset = 0
+            self.read_data = False
+            if (self.transport and self.socket.bytes):
+                self.data_received(None)
 
     def getText(self, object, *params):
         keys = object.split(".")
@@ -349,12 +386,11 @@ class Client:
                 self.cancelTrade(self.tradeName)
 
             if self.playerName in self.server.reports:
-                if not self.server.reports[self.playerName]["state"] == "banned":
+                if not self.server.reports[self.playerName]["state"] in ["banned", "deleted"]:
                     self.server.reports[self.playerName]["state"] = "disconnected"
-                    #self.modoPwet.updateModoPwet()
                     self.modoPwet.reloadCache(self.playerName, {"state":"disconnected"})
-                    if self.privLevel >= 7 and self.isModoPwetNotifications:
-                        self.sendmodServerMessage("<ROSE>[Modopwet]</ROSE><BL> The reported player <BV>"+self.playerName+"</BV> has disconnected from game.</BL>")
+                    #if self.privLevel >= 7 and self.isModoPwetNotifications:
+                        #self.sendmodServerMessage("<ROSE>[Modopwet]</ROSE><BL> The reported player <BV>"+self.playerName+"</BV> has disconnected from game.</BL>")
 
             if self.playerName in self.server.chatMessages:
                 self.server.chatMessages[self.playerName] = {}
@@ -369,10 +405,19 @@ class Client:
 
             if not self.playerName == "":
                 if not self.isGuest:
-                    self.updateDatabase()        
-
+                    self.updateDatabase()
+                    
+            if self.isFollowing == True:
+                for item in self.modopwetwatchers:
+                    self.server.players[item].isHidden = False
+                    self.server.players[item].sendPacket(Identifiers.send.Watch, ByteArray().writeUTF("").writeBoolean(False).toByteArray())
+                    self.server.players[item].enterRoom("1")
+                    #self.server.players[item].startBulle("1")
+                    self.modopwetwatchers.pop()
+                        
         if self.room != None:
             self.room.removeClient(self)
+            
             
         self.sendModInfo(0)
         
@@ -417,7 +462,9 @@ class Client:
         packetID, C, CC = packet.readByte(), packet.readByte(), packet.readByte()        
         if not self.validatingVersion:
             if (C == Identifiers.recv.Informations.C and CC == Identifiers.recv.Informations.Correct_Version) and not (self.isClosed):
-                version, lang, ckey = packet.readShort(), packet.readUTF(), packet.readUTF()
+                version, lang, ckey, stand = packet.readShort(), packet.readUTF(), packet.readUTF(), packet.readUTF()
+                if stand == "StandAlone" and self.server.activateAntiCheat:
+                    self.sendServerMessage("[Anti-Cheat] The ip <font color='#FFFFFF'>"+self.TFMIP(self.ipAddress)+"</font> is connected with standalone.")
 
                 if not ckey == self.server.CKEY and version != self.server.Version:
                     print("[%s] [WARN] Invalid version or CKey (%s, %s)" %(time.strftime("%H:%M:%S"), version, ckey))
@@ -425,13 +472,10 @@ class Client:
                 else:
                     self.validatingVersion = True
                     self.sendCorrectVersion(lang)
-
-                    
         else:
             try:
-                self.lastPacketID = (self.lastPacketID + 1) % 100
+                #self.lastPacketID = (self.lastPacketID + 1) % 100
                 self.lastPacketID = packetID
-                #self.Packets.parsePacket(packetID, C, CC, packet)
                 if C != 0 and CC != 0:
                     if self.server.ac_enabled == 1:
                         self.AntiCheat.readPacket(C + CC)
@@ -461,7 +505,8 @@ class Client:
         return '.'.join(result)
 
     def ipColor(self, ip):
-        return "%06x" % random.randint(0, 0xFFFFFF)
+        return "#FFFFFF"
+       # return "%06x" % random.randint(0, 0xFFFFFF)
 
     def BulleServer(self, commu):
         if commu == '*': return "bulle4"
@@ -628,7 +673,7 @@ class Client:
                 self.transport.close()
                 return
 
-        if self.getConnectedPlayerCount() > self.server.MaximumPlayers:
+        if len(self.server.players) > self.server.MaximumPlayers:
             self.sendPacket(Identifiers.old.send.Player_Ban_Login, [0, "The server has limit."])
             self.transport.close()
 
@@ -770,23 +815,28 @@ class Client:
                 self.sendPacket([60, 4], chr(1))
                 self.Skills.sendShamanSkills(False)
                 self.Skills.sendExp(self.shamanLevel, self.shamanExp, self.shamanExpNext)
-                if self.shamanSaves >= 1500:
-                    self.sendShamanType(self.shamanType, (self.shamanSaves >= 1500 and self.hardModeSaves >= 1500))
+                if self.shamanSaves >= self.server.minimumNormalSaves:
+                    self.sendShamanType(self.shamanType, (self.shamanSaves >= self.server.minimumNormalSaves and self.hardModeSaves >= self.server.minimumHardSaves))
 
                 self.server.checkPromotionsEnd()
                 self.sendTimeStamp()
                 self.sendPromotions()
-
+                self.sendModInfo(1)
+                
                 if self.tribeCode != 0:
-                    tribeInfo = self.tribulle.getTribeInfo(self.tribeCode)
-                    self.tribeName = tribeInfo[0]
-                    self.tribeMessage = tribeInfo[1]
-                    self.tribeHouse = tribeInfo[2]
-                    self.tribeRanks = tribeInfo[3]
-                    self.tribeChat = tribeInfo[4]
+                    self.tribeInfo = self.tribulle.getTribeInfo(self.tribeCode)
+                    self.tribeName = str(self.tribeInfo[0])
+                    self.tribeMessage = str(self.tribeInfo[1])
+                    self.tribeHouse = int(self.tribeInfo[2])
+                    self.tribeRanks = str(self.tribeInfo[3])
+                    self.tribeChat = str(self.tribeInfo[4])
                 self.tribulle.sendFriendsList(None)
                 if not self.isGuest:
                     self.sendPacketTribulle(62, ByteArray().writeUTF(self.langue.lower()).toByteArray())
+                    if self.langue.lower() in self.server.chats and not self.playerName in self.server.chats[self.langue.lower()]:
+                        self.server.chats[self.langue.lower()].append(self.playerName)
+                    elif not self.langue.lower() in self.server.chats:
+                        self.server.chats[self.langue.lower()] = [self.playerName]
                 self.missions.loadMissions()
 
                 for player in self.server.players.values():
@@ -802,8 +852,10 @@ class Client:
                 self.startBulle(self.server.checkRoom(startRoom, self.langue) if not startRoom == "" and not startRoom == "1" else self.server.recommendRoom(self.langue))
                 self.langueStaff = self.langue
                 if self.playerName in self.server.reports and self.server.reports[self.playerName]["state"] == "disconnected":
-                    self.modoPwet.reloadCache(self.playerName, {"state":"online", "language": self.modoPwet.getModopwetLangue(playerName)})
-                self.sendModInfo(1)
+                    try:
+                        self.modoPwet.reloadCache(self.playerName, {"state":"online", "language": self.modoPwet.getModopwetLangue(playerName)})
+                    except:
+                        pass
                 
     def sendPlayerIdentification(self):
         permsCount = 0
@@ -1021,13 +1073,10 @@ class Client:
             info = struct.pack('!h', len(message)) + message + '\n'
             client.room.sendPacket([29, 25], info)    
             
-    def getConnectedPlayerCount(self):
-        return len(self.server.players)
-
     def updateDatabase(self):
         if not self.isGuest:
             Cursor.execute("update Users set PrivLevel = %s, TitleNumber = %s, FirstCount = %s, CheeseCount = %s, ShamanCheeses = %s, ShopCheeses = %s, ShopFraises = %s, ShamanSaves = %s, HardModeSaves = %s, DivineModeSaves = %s, BootcampCount = %s, ShamanType = %s, ShopItems = %s, ShamanItems = %s, Clothes = %s, Look = %s, ShamanLook = %s, mouseColor = %s, shamanColor = %s, RegDate = %s, Badges = %s, CheeseTitleList = %s, FirstTitleList = %s, ShamanTitleList = %s, ShopTitleList = %s, BootcampTitleList = %s, HardModeTitleList = %s, DivineModeTitleList = %s, SpecialTitleList = %s, BanHours = %s, ShamanLevel = %s, ShamanExp = %s, ShamanExpNext = %s, Skills = %s, LastOn = %s, FriendsList = %s, IgnoredsList = %s, Gender = %s, LastDivorceTimer = %s, Marriage = %s, TribeCode = %s, TribeRank = %s, TribeJoined = %s, SurvivorStats = %s, RacingStats = %s, Consumables = %s, EquipedConsumables = %s, Pet = %s, PetEnd = %s, ShamanBadges = %s, EquipedShamanBadge = %s, VisuDone = %s, CustomItems = %s, Langue = %s, Time = %s, Karma = %s, user_line_status = 1  where Username = %s", [self.privLevel, self.titleNumber, self.firstCount, self.cheeseCount, self.shamanCheeses, self.shopCheeses, self.shopFraises, self.shamanSaves, self.hardModeSaves, self.divineModeSaves, self.bootcampCount, self.shamanType, self.shopItems, self.shamanItems, "|".join(map(str, self.clothes)), self.playerLook, self.shamanLook, self.mouseColor, self.shamanColor, self.regDate, str(self.shopBadges), ",".join(map(str, self.cheeseTitleList)), ",".join(map(str, self.firstTitleList)), ",".join(map(str, self.shamanTitleList)), ",".join(map(str, self.shopTitleList)), ",".join(map(str, self.bootcampTitleList)), ",".join(map(str, self.hardModeTitleList)), ",".join(map(str, self.divineModeTitleList)), ",".join(map(str, self.specialTitleList)), self.banHours, self.shamanLevel, self.shamanExp, self.shamanExpNext, ";".join(map(lambda skill: "%s:%s" %(skill[0], skill[1]), self.playerSkills.items())), self.tribulle.getTime(), ",".join(map(str, filter(None, self.friendsList))), ",".join(map(str, filter(None, self.ignoredsList))), self.gender, self.lastDivorceTimer, self.marriage, self.tribeCode, self.tribeRank, self.tribeJoined, ",".join(map(str, self.survivorStats)), ",".join(map(str, self.racingStats)), ";".join(map(lambda consumable: "%s:%s" %(consumable[0], 250 if consumable[1] > 250 else consumable[1]), self.playerConsumables.items())), ",".join(map(str, self.equipedConsumables)), self.pet, abs(Utils.getSecondsDiff(self.petEnd)), ",".join(map(str, self.shamanBadges)), self.equipedShamanBadge, "|".join(map(str, self.visuDone)), ",".join(map(str, self.custom)), self.langueStaff, (self.playerTime+Utils.getSecondsDiff(self.loginTime)), self.playerKarma, self.playerName])
-            self.AntiCheat.update()
+            #self.AntiCheat.update()
 
     def startBulle(self, roomName):
         if not self.isEnterRoom:
@@ -1095,13 +1144,8 @@ class Client:
                 self.room.funcorpNames[player.playerName] = player.playerName
 
         if self.followed != None:
-            self.followed.startBulle(self.roomName)
+            self.followed.enterRoom(self.roomName)
             self.followed.sendPacket(Identifiers.send.Watch, ByteArray().writeUTF(self.playerName).writeBoolean(True).toByteArray())
-        #else:
-            #if self.isHidden == True:
-                #self.followed = None
-                #self.isHidden == False
-                #self.enterRoom("1")
         
         if self.playerName in self.server.reports and self.followed == None:
             self.sendmodServerMessage(f"<ROSE>[Modopwet]</ROSE> The player <BV>{self.playerName}</BV> (<N>{self.modoPwet.getReportType(self.playerName)}</N>) left the room [{self.lastroom}] and came to the room [{self.roomName}].")
@@ -1292,7 +1336,7 @@ class Client:
         self.sendShaman(shamanCode, shamanCode2, self.server.getShamanType(shamanCode), self.server.getShamanType(shamanCode2), self.server.getShamanLevel(shamanCode), self.server.getShamanLevel(shamanCode2), self.server.getShamanBadge(shamanCode), self.server.getShamanBadge(shamanCode2))
 
     def sendCorrectVersion(self, lang='en'):
-        self.sendPacket(Identifiers.send.Correct_Version, ByteArray().writeInt(self.getConnectedPlayerCount()).writeUTF(lang).writeUTF('').writeInt(self.authKey).writeBoolean(False).toByteArray())
+        self.sendPacket(Identifiers.send.Correct_Version, ByteArray().writeInt(len(self.server.players)).writeUTF(lang).writeUTF('').writeInt(self.authKey).writeBoolean(False).toByteArray())
         self.sendPacket(Identifiers.send.Banner_Login, ByteArray().writeByte(1).writeByte(self.server.adventureID).writeShort(256).toByteArray())
         self.sendPacket(Identifiers.send.Image_Login, ByteArray().writeUTF(self.server.adventureIMG).toByteArray())
         self.verifycoder = random.choice(range(0,10000))
@@ -1353,7 +1397,7 @@ class Client:
         found = False
         rooms = roomName[3:]
         count = "".join(i for i in rooms if i.isdigit())
-        for room in ["vanilla", "survivor", "racing", "music", "bootcamp", "defilante", "village", "#deathmatch"]:
+        for room in ["vanilla", "survivor", "racing", "music", "bootcamp", "defilante", "village", "#fastracing"]:
             if rooms.startswith(room) and not count == "" or rooms.isdigit():
                 found = not (int(count) < 1 or int(count) > 1000000000 or rooms == room)
                 
@@ -2016,10 +2060,16 @@ class Client:
         for arg in args:
             packet.writeUTF(arg)
         self.sendPacket(Identifiers.send.Message_Langue, packet.toByteArray())
+        
+    def sendLangueMessageALL(self, community, message, *args):
+        packet = ByteArray().writeUTF(community).writeUTF(message).writeByte(len(args))
+        for arg in args:
+            packet.writeUTF(arg)
+        self.room.sendAll(Identifiers.send.Message_Langue, packet.toByteArray())
 
     def sendModMute(self, playerName, hours, reason, only):
         if not only:
-            self.room.sendMessage("", "<ROSE>$MuteInfo2", playerName, playerName, hours, reason)
+            self.sendLangueMessageALL("", "<ROSE>$MuteInfo2", playerName, playerName, hours, reason)
         else:
             player = self.server.players.get(playerName)
             if player:
@@ -2528,6 +2578,9 @@ class Server(asyncio.Transport):
         self.calendarioSystem = eval(self.config("game.calendario"))
         self.calendarioCount = eval(self.config("game.calendarioCount"))
         self.MaximumPlayers = int(self.config('game.maxPlayers'))
+        self.minimumNormalSaves = int(self.config('game.minimumNormalSaves'))
+        self.minimumHardSaves = int(self.config('game.minimumHardSaves'))
+        
         
         self.shopList = self.configShop("shop.shopList").split(";")
         self.shamanShopList = self.configShop("shop.shamanShopList").split(";")
@@ -2557,7 +2610,6 @@ class Server(asyncio.Transport):
         self.inventory = [2236, 2202, 2203, 2204, 2227, 2235, 2257, 2261, 2253, 2254, 2260, 2261, 2263, 2264, 2265, 2266, 2267, 2268, 2269, 2270, 2271, 2272, 2273, 2274, 2275, 2276, 2277, 2278, 2279, 2280, 2281, 2282, 2283, 2284, 2285, 2286, 2287, 2288, 2289, 2290, 2291, 2292, 2293, 2294, 2295, 2296, 2297, 2298, 2299, 2300, 2301, 2302, 2303, 2304, 2305, 2306, 2310, 2311, 2312, 2313, 2314, 2315, 2316, 2317, 2318, 2319, 2320, 2321, 2322, 2323, 2324, 2325, 2326, 2327, 2328]
         #self.inventory = [2224, 2236]
         self.ranking = [{}, {}, {}, {}]
-        self.chats = {}
 
         # Dict
         self.rooms = {}
@@ -2572,6 +2624,7 @@ class Server(asyncio.Transport):
         self.minigames = {}
         self.officialminigames = {}
         self.shamanShopListCheck = {}
+        self.chats = {}
         self.fastRacingRecords = {"recordmap":{},"sequentialrecords":[],"records":{}}
         self.statsPlayer = {"racingCount":[1500,10000,10000,10000], "survivorCount":[1000,800,20000,10000], "racingBadges":[124,125,126,127], "survivorBadges":[120,121,122,123]}
         self.shopBadges = {2227:2, 2208:3, 2202:4, 2209:5, 2228:8, 2218:10, 2206:11, 2219:12, 2229:13, 2230:14, 2231:15, 2211:19, 2232:20, 2224:21, 2217:22, 2214:23, 2212:24, 2220:25, 2223:26, 2234:27, 2203:31, 2220:32, 2236:36, 2204:40, 2239:43, 2241:44, 2243:45, 2244:48, 2207:49, 2246:52, 2247:53, 210:54, 2225:56, 2213:60, 2248:61, 2226:62, 2249:63, 2250:66, 2252:67, 2253:68, 2254:70, 2255:72, 2256:128, 2257:135, 2258:136, 2259:137, 2260:138, 2261:140, 2262:141, 2263:143, 2264:146, 2265:148, 2267:149, 2268:150, 2269:151, 2270:152, 2271:155, 2272:156, 2273:157, 2274:160, 2276:165, 2277:167, 2278:171, 2279:173, 2280:175, 2281:176, 2282:177, 2283:178, 2284:179, 2285:180, 2286:183, 2287:185, 2288:186, 2289:187, 2290:189, 2291:191, 2292:192, 2293:194, 2294:195, 2295:196, 2296:197, 2297:199, 2298:200, 2299:201, 230100:203, 230101:204, 230102:205, 230103:206, 230104:207, 230105:208, 230106:210, 230107:211, 230108:212, 230110: 214, 230111: 215, 230112: 216, 230113: 217, 230114: 220, 230115: 222, 230116: 223, 230117: 224, 230118: 225, 230119: 226, 230120: 227, 230121: 228, 230122: 229, 230123: 231, 230124: 232, 230125: 233, 230126: 234, 230127: 235}
@@ -2619,8 +2672,6 @@ class Server(asyncio.Transport):
         ports = self.configSWF("swf.ports").split(',')
         for port in ports:
             coro = self.loop.create_server(lambda: Client(self), "0.0.0.0", port)
-            #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            #s.bind(("127.0.0.1", 13801))
             server = self.loop.run_until_complete(coro)
             #self.loop.run_until_complete(coro)
         packet_keys = self.configSWF("swf.packetKeys").replace(',', ", ")
@@ -2832,7 +2883,8 @@ class Server(asyncio.Transport):
     
     def sendServerRestartSEC(self, seconds):
         self.sendPanelRestartMessage(seconds)
-        self.sendWholeServer(Identifiers.send.Server_Restart, ByteArray().writeInt(seconds * 1000).toByteArray())
+        for player in self.players.values():
+            player.sendPacket(Identifiers.send.Server_Restart, ByteArray().writeInt(seconds * 1000).toByteArray())
 
     def sendPanelRestartMessage(self, seconds):
         if seconds == 120:
@@ -2916,7 +2968,7 @@ class Server(asyncio.Transport):
             client.sendPlayerBan(bantime, reason)
             if not modname == "Server":
                 client.banHours += bantime
-                self.modoPwetIslem(playerName,bantime,reason,modname,"ban")
+                client.modoPwet.receiveKarma(playerName,bantime,reason,modname,"ban")
                 self.saveCasier(playerName,"BAN",modname,bantime,reason)
                 Cursor.execute("insert into BanLog values (%s, %s, %s, %s, %s, 'Online', %s)", [playerName, modname, bantime, reason, int(time.time() / 10), client.ipAddress])
             else:
@@ -2944,11 +2996,6 @@ class Server(asyncio.Transport):
                 Cursor.execute("update Users SET BanHours = %s WHERE Username = %s", [bantime, playerName])
             return found
 
-    def checkCommunity(self, cm):
-        #if cm == "EN" or cm == "FR" or cm == "RU" or cm =="BR" or cm =="ES" or cm =="CN" or cm =="TR" or cm =="VK" or cm =="PL" or cm =="HU" or cm =="NL" or cm =="RO" or cm =="ID" or cm =="DE" or cm =="E2" or cm =="AR" or cm =="PH" or cm =="LT" or cm =="JP" or cm =="CH" or cm =="FI" or cm =="CZ" or cm =="SK" or cm =="HR" or cm =="BG" or cm =="LV" or cm =="HE" or cm =="IT" or cm =="ET" or cm =="AZ" or cm =="PT":
-        return 1
-        #return 0
-
     def checkTempBan(self, playerName):
         Cursor.execute("select 1 from UserTempBan where Username = %s", [playerName])
         return Cursor.fetchone() != None
@@ -2960,10 +3007,7 @@ class Server(asyncio.Transport):
     def checkRecordMap(self, mapCode):
         CursorMaps.execute('select RecDate from Maps where Code = ?', [mapCode])
         rs = CursorMaps.fetchone()
-        if rs[0] != None and rs[0] != 0:
-            return True
-        else: 
-            return False
+        return (rs[0] > 0)
 
     def removeTempBan(self, playerName):
         if playerName in self.userTempBanCache:
@@ -3022,7 +3066,6 @@ class Server(asyncio.Transport):
                 self.banPlayer(playerName, 1, "Vote Populaire", "Server", False)
             self.sendServerMessage("The player <BV>%s</BV> is voted to <N>%s</N> (%s/10)" %(playerVoted, playerName, len(player.voteBan)))
 
-
     def muteUser(self, playerName, mutetime, reason):
         self.userMuteCache.append(playerName)
         Cursor.execute("insert into UserTempMute values (%s, %s, %s)", [playerName, str(Utils.getTime() + (mutetime * 60 * 60)), reason])
@@ -3052,7 +3095,7 @@ class Server(asyncio.Transport):
             player.sendModMute(playerName, hours, reason, True)
             self.muteUser(playerName, hours, reason)
             self.saveCasier(playerName,"MUTE",modName,hours,reason)
-            self.modoPwetIslem(playerName,hours,reason,modName,"mute")
+            player.modoPwet.receiveKarma(playerName,hours,reason,modName,"mute")
     
     def mutePlayerIP(self, playerName, hours, reason, modName):
         player = self.players.get(playerName)
@@ -3066,7 +3109,7 @@ class Server(asyncio.Transport):
             player.sendModMute(playerName, hours, reason, True)
             self.muteUser(playerName, hours, reason)
             self.saveCasier(playerName,"MUTE",modName,hours,reason)
-            self.modoPwetIslem(playerName,hours,reason,modName,"mute")
+            player.modoPwet.receiveKarma(playerName,hours,reason,modName,"mute")
             for player1 in self.players.values():
                 if player1.ipAddress == player.ipAddress and player1 != player:
                     self.muteUser(player1.playerName, hours, reason)
@@ -3220,10 +3263,6 @@ class Server(asyncio.Transport):
         if needUpdate:
             with open("./include/json/promotions.json", "w") as f:
                 json.dump(self.promotions, f)
-
-    def sendWholeServer(self, identifiers, result):
-        for player in self.players.values():
-            player.sendPacket(identifiers, result)
 
     def getPlayerCode(self, playerName):
         player = self.players.get(Utils.parsePlayerName(playerName))
@@ -3655,7 +3694,6 @@ class Room:
             self.currentMap = self.selectMap()
             self.checkMapXML()
             
-
             if self.currentMap in [range(44, 54), range(138, 144)] or self.mapPerma == 8 and self.getPlayerCount() >= 3:
                 self.isDoubleMap = True
 
@@ -3664,6 +3702,9 @@ class Room:
 
             if self.currentMap in [108, 109, 110, 111, 112, 113, 170, 171]:
                 self.catchTheCheeseMap = True
+
+            if self.mapPerma == 11 and self.isSurvivor and self.roomName.find("survivor") != -1:
+                self.server.loop.call_later(5, self.sendVampireMode)
 
             self.gameStartTime = Utils.getTime()
             self.gameStartTimeMillis = time.time()
@@ -3737,11 +3778,16 @@ class Room:
             if self.autoRespawn or self.isTribeHouseMap:
                 self.autoRespawnTimer = self.server.loop.call_later(2, self.respawnMice)
                 
-            if self.mapPerma == 11 and self.isSurvivor and self.roomName.find("survivor") != -1:
-                self.server.loop.call_later(5, self.sendVampireMode)
-                
         if self.luaRuntime != None:
             self.luaRuntime.emit("newGame", self.currentMap)
+
+    def getPlayersCountbyRoom(self, roomName):
+        cnt = 0
+        for player in self.clients.values():
+            r1 = player.room.name[3:]
+            if r1.startswith(roomName):
+                cnt += 1
+        return cnt
 
     def getPlayerCount(self):
         return len(list(filter(lambda player: not player.isHidden, self.clients.values())))

@@ -23,12 +23,22 @@ class ModoPwet:
             
     def reloadCache(self, playerName, args={}):
         f = open("./include/json/modopwet.json", "r")
-        data = json.load(f)
+        data = json.loads(f.read())
         f.close()
         for key, values in args.items():
             data[playerName][key] = values
         f = open("./include/json/modopwet.json", "w")
-        json.dump(data, f)
+        f.write(json.dumps(data))
+        f.close()
+        
+    def removeCache(self, playerName, args):
+        f = open("./include/json/modopwet.json", "r")
+        data = json.loads(f.read())
+        f.close()
+        for key in args:
+            del data[playerName][key]
+        f = open("./include/json/modopwet.json", "w")
+        f.write(json.dumps(data))
         f.close()
          
     def checkReport(self, array, playerName):
@@ -41,12 +51,12 @@ class ModoPwet:
         elif type == 3: return "Phishing"
         return "Other"
 
-    def makeReport(self, playerName, type, comments):
+    def makeReport(self, playerName, T, comments):
         playerName = Utils.parsePlayerName(playerName)
         modName = self.client.playerName
         player = self.server.players.get(playerName)
         if player != None:
-            player.isReportedType = type
+            player.isReportedType = T
             roomName = player.room.name
             player.lastroom = roomName
             self.client.sendmodServerMessage("<ROSE>[Modopwet]</ROSE> The player <BV>%s</BV> has been reported for <N>%s</N> in room [%s] (<a href='event:modopwetfollow#%s'><FC>Follow</FC></a> - <a href='event:modopwetwatch#%s'><FC>Watch</FC></a>)." % (playerName,self.ReportType(type),roomName, playerName, playerName))
@@ -55,18 +65,18 @@ class ModoPwet:
             if playerName in self.server.reports:
                 if modName in self.server.reports[playerName]['reporters']:
                     r = self.server.reports[playerName]['reporters'][modName]
-                    if r[0] != type:
-                        self.server.reports[playerName]['reporters'][modName]=[type,comments,Utils.getTime()]
+                    if r[0] != T:
+                        self.server.reports[playerName]['reporters'][modName]=[T,comments,Utils.getTime()]
                 else:
-                    self.server.reports[playerName]['reporters'][modName]=[type,comments,Utils.getTime()]
+                    self.server.reports[playerName]['reporters'][modName]=[T,comments,Utils.getTime()]
                 self.server.reports[playerName]['state'] = 'online' if self.server.checkConnectedAccount(playerName) else 'disconnected'
             else:
                 self.server.reports[playerName] = {}
-                self.server.reports[playerName]['reporters'] = {modName:[type,comments,Utils.getTime()]}
+                self.server.reports[playerName]['reporters'] = {modName:[T,comments,Utils.getTime()]}
                 self.server.reports[playerName]['state'] = 'online' if self.server.checkConnectedAccount(playerName) else 'disconnected'
                 self.server.reports[playerName]['language'] = self.getModopwetLangue(playerName)
                 self.server.reports[playerName]['isMuted'] = False
-            self.updateModoPwet()
+            #self.updateModoPwet()
             self.client.sendBanConsideration()
             
     def getModopwetLangue(self, playerName):
@@ -202,6 +212,7 @@ class ModoPwet:
                             p.writeShort(int(Utils.getSecondsDiff(r[2])/60))
                                 
                         mute = v["isMuted"]
+                        #mute = player.isMute if player != None else v["isMuted"]
                         p.writeBoolean(mute) #isMute
                         if mute:
                             p.writeUTF(v["mutedBy"])
@@ -248,3 +259,22 @@ class ModoPwet:
             packet.writeUTF(self.server.chatMessages[playerName][len(self.server.chatMessages[playerName])-1][1])
             packet.writeUTF(self.server.chatMessages[playerName][len(self.server.chatMessages[playerName])-1][0])
             self.client.sendPacket(Identifiers.send.Modopwet_Chatlog, packet.toByteArray())
+            
+    def receiveKarma(self, playerName, hours, reason, modName, state):
+        if playerName in self.server.reports:
+            if state == "mute":
+                self.server.reports[playerName]["isMuted"] = True
+                self.server.reports[playerName]["muteHours"] = int(hours)
+                self.server.reports[playerName]["muteReason"] = reason
+                self.server.reports[playerName]["mutedBy"] = modName
+            elif state == "ban":
+                self.server.reports[playerName]["status"] = "banned"
+                self.server.reports[playerName]["bannedby"] = modName
+                self.server.reports[playerName]["banhours"] = hours
+                self.server.reports[playerName]["banreason"] = reason
+            self.saveCache()
+            for name in self.server.reports[playerName]["reporters"]:  
+                player = self.server.players.get(name) 
+                if player != None:
+                    player.playerKarma += 1
+                    player.sendMessage("<V>[•]</V> Your report regarding the player "+playerName+" has been handled. (karma: "+str(player.playerKarma)+")")
