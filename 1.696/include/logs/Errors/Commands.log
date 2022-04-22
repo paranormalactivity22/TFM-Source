@@ -1,0 +1,42 @@
+
+============================================================
+- Time: 22/04/2022 - 04:49:27
+- Name: Chatta
+- Error Command: 
+Traceback (most recent call last):
+  File "C:\Users\believix\Desktop\1.626\modules\ParseCommands.py", line 1452, in parseCommand
+    iTime = 5 if iTime < 1 else (32767 if iTime > 32767 else iTime)
+UnboundLocalError: local variable 'iTime' referenced before assignment
+
+============================================================
+- Time: 22/04/2022 - 04:49:34
+- Name: Chatta
+- Error Command: 
+Traceback (most recent call last):
+  File "C:\Users\believix\Desktop\1.626\modules\ParseCommands.py", line 1452, in parseCommand
+    iTime = 5 if iTime < 1 else (32767 if iTime > 32767 else iTime)
+UnboundLocalError: local variable 'iTime' referenced before assignment
+
+============================================================
+- Time: 22/04/2022 - 05:19:34
+- Name: Chatta
+- Error Command: 
+Traceback (most recent call last):
+  File "C:\Users\believix\Desktop\1.626\modules\ParseCommands.py", line 1450, in parseCommand
+    time = 5 if time < 1 else (32767 if time > 32767 else time)
+TypeError: '<' not supported between instances of 'str' and 'int'
+
+============================================================
+- Time: 22/04/2022 - 05:23:34
+- Name: Chatta
+- Error Command: 
+Traceback (most recent call last):
+  File "C:\Users\believix\Desktop\1.626\modules\ParseCommands.py", line 733, in parseCommand
+    self.client.room.mapChange()
+  File "C:\Users\believix\Desktop\1.626\Start.py", line 3578, in mapChange
+    self.closeVoting()
+  File "C:\Users\believix\Desktop\1.626\Start.py", line 4173, in closeVoting
+    self.mapChange()
+  File "C:\Users\believix\Desktop\1.626\Start.py", line 3701, in mapChange
+    self.server.loop.call_later(10, self.sendAll(Identifiers.send.Gravitation_Skill, ByteArray().writeShort(seconds).writeInt(velX).writeInt(velY).toByteArray()))
+NameError: name 'seconds' is not defined

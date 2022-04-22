@@ -1,0 +1,1 @@
+{"learning":"false","ban_times":"999"}
