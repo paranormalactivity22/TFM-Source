@@ -6,4 +6,19 @@ Transformice is 2010 french flash-game written in AS3 (Action script 3), where p
 - As I mention you need python 3, and several modules: pymysql, configparser, twisted, lupa, zope.interface, zlib, ast.
 - You need also place where to store the database, I use xampp (mysql - localhost/phpmyadmin).  If you get MySQL error, disable the strict mode (sql_mode=NO_ENGINE_SUBSTITUTION).
 - After you create db and install all modules, press Controller.py file.
-- After that you can create an account or login on it. If you get error about base.py file (which is possible), contact me at .....
+- After that you can create an account or login on it. If you get error about base.py file (which is possible), contact me at discord -> Paranormal Activity#6083
+
+# Programs
+http://python.org/ (Python)
+https://www.apachefriends.org/ (Xampp)
+
+pip install lupa
+pip install zope.interface
+pip install twitsted
+pip install pymysql
+pip install configparser
+
+# Screenshots
+![image](https://user-images.githubusercontent.com/69107484/208734507-b61e3611-6719-47d9-a314-fc8296f55025.png)
+![image](https://user-images.githubusercontent.com/69107484/208734831-ebddf7b0-7a03-404e-a570-4ba36cdac718.png)
+![image](https://user-images.githubusercontent.com/69107484/208734884-be5aa9e8-130d-43a2-8ef0-edb4d668bd14.png)
