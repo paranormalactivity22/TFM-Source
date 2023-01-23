@@ -4,7 +4,7 @@ class GameException():
     def __init__(self, client):
         self.client = client
         
-    def Invoke(self, ExceptionType, playerName=""):
+    def Invoke(self, ExceptionType, playerName="", functionName=""):
         if ExceptionType == "unknownuser":
             self.client.sendClientMessage("The supplied argument isn't a valid nickname.", 1)
         elif ExceptionType == "moreargs":
@@ -16,7 +16,7 @@ class GameException():
         elif ExceptionType == "notloggedin":
             self.client.sendClientMessage("The player "+playerName+" hasn't logged in since the last reboot.", 1)
         elif ExceptionType == "notallowedlua":
-            pass
+            self.client.sendLuaMessage(f"[<V>{self.client.roomName}</V>] [{self.client.playerName}] You're not allowed to use the function {functionName}.")
         elif ExceptionType == "norecordsfound":
             pass
         elif ExceptionType == "useralreadybanned":
@@ -27,6 +27,7 @@ class GameException():
             self.client.sendClientMessage("Player ["+playerName+"] is already muted, please wait.", 1)
         elif ExceptionType == "usernotmuted":
             self.client.sendClientMessage("The player "+playerName+" is not muted.", 1)
+        return
         
 class ServerException():
     def __init__(self, Exception):

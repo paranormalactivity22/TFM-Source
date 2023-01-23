@@ -1,5 +1,6 @@
 #coding: utf-8
 import asyncio
+
 # Modules
 from ByteArray import ByteArray
 from Identifiers import Identifiers
@@ -8,10 +9,9 @@ class Skills:
     def __init__(self, player, server):
         self.client = player
         self.server = player.server
-        self.rangeArea = 85
 
     def sendExp(self, level, exp, nextLevel):
-        self.client.sendPacket(Identifiers.send.Shaman_Exp, ByteArray().writeShort(level - 1).writeInt(exp).writeInt(nextLevel).toByteArray())
+        self.client.sendPacket(Identifiers.send.Shaman_Exp, ByteArray().writeShort(0 if level - 1 <= 0 else level - 1).writeInt(exp).writeInt(nextLevel).toByteArray())
 
     def sendGainExp(self, amount):
         self.client.sendPacket(Identifiers.send.Shaman_Gain_Exp, ByteArray().writeInt(amount).toByteArray())
@@ -20,21 +20,19 @@ class Skills:
         self.client.sendPacket(Identifiers.send.Shaman_Earned_Exp, ByteArray().writeShort(xp).writeShort(numCompleted).toByteArray())
 
     def sendEarnedLevel(self, playerName, level):
-        self.client.room.sendAll(Identifiers.send.Shaman_Earned_Level, ByteArray().writeUTF(playerName).writeShort(level - 1).toByteArray())
+        self.client.room.sendAll(Identifiers.send.Shaman_Earned_Level, ByteArray().writeUTF(playerName).writeShort(0 if level - 1 <= 0 else level - 1).toByteArray())
     
     def sendTeleport(self, type, posX, posY):
         self.client.room.sendAll(Identifiers.send.Teleport, ByteArray().writeByte(type).writeShort(posX).writeShort(posY).toByteArray())
     
     def sendSkillObject(self, objectID, posX, posY, angle):
-        self.client.room.sendAll(Identifiers.send.Skill_Object, ByteArray().writeShort(posX).writeShort(posY).writeByte(objectID).writeShort(angle).writeInt(0).writeBoolean(False).toByteArray())
+        self.client.room.sendAll(Identifiers.send.Skill_Object, ByteArray().writeShort(posX).writeShort(posY).writeByte(objectID).writeShort(angle).toByteArray()) #.writeInt(0).writeBoolean(False)
     
     def sendShamanSkills(self, refresh):
         packet = ByteArray().writeByte(len(self.client.playerSkills))
         for skill in self.client.playerSkills.items():
-            packet.writeByte(skill[0]).writeByte(skill[1])
-
+            packet.writeByte(skill[0]).writeByte(5 if self.client.playerSkills[skill[0]] >= 6 else skill[1])
         packet.writeBoolean(refresh)
-
         self.client.sendPacket(Identifiers.send.Shaman_Skills, packet.toByteArray())
     
     def sendEnableSkill(self, id, count):
@@ -103,13 +101,13 @@ class Skills:
             if isShaman:
                 self.sendEarnedExp(gainExp, exp)
         else:
-            if self.client.shamanLevel < 300:
+            if self.client.shamanLevel < 275:
                 self.client.shamanLevel += 1
                 self.client.shamanExp -= self.client.shamanExpNext
                 if self.client.shamanExp < 0:
                     self.client.shamanExp = 0
 
-                self.client.shamanExpNext += 90
+                self.client.shamanExpNext += 90 * self.client.shamanLevel
 
                 self.sendExp(self.client.shamanLevel, 0, self.client.shamanExpNext)
                 self.sendGainExp(self.client.shamanExp)
@@ -135,7 +133,7 @@ class Skills:
                     self.client.playerSkills = {}
                     self.sendShamanSkills(True)
                     self.client.canRedistributeSkills = False
-                    if self.client.resSkillsTimer != None: self.client.resSkillsTimer.cancel()
+                    #if self.client.resSkillsTimer != None: self.client.resSkillsTimer.cancel()
                     self.client.resSkillsTimer = self.server.loop.call_later(600, setattr, self, "canRedistributeSkills", True)
                     self.client.totem = [0, ""]
                 else:
@@ -218,8 +216,9 @@ class Skills:
                 self.sendEnableSkill(72, [25, 30, 35, 40, 45][(5 if count > 5 else count) - 1])
 
             if 89 in self.client.playerSkills and not self.client.room.isSurvivor:
-                count = self.client.playerSkills[89]            
-                self.sendEnableSkill(49, [56, 52, 48, 44, 40][(5 if count > 5 else count) - 1])
+                count = self.client.playerSkills[89]
+                self.sendEnableSkill(49, [80, 70, 60, 50, 40][(5 if count > 5 else count) - 1])
+                #self.sendEnableSkill(49, [56, 52, 48, 44, 40][(5 if count > 5 else count) - 1])
                 self.sendEnableSkill(54, [96, 92, 88, 84, 80][(5 if count > 5 else count) - 1])
 
             if 91 in self.client.playerSkills:

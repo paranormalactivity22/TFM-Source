@@ -17,7 +17,6 @@ class Lua:
         self.name = ""
         self.script = ""
         # Boolean
-        self.roomFix = False
         self.running = True
         # Dict
         self.RoomObjects = {}
@@ -28,7 +27,6 @@ class Lua:
         # Integer
         self.LastRoomObjectID = 2000
         self.lastloopid = 1
-        self.lastnpc = 1
         self.maxData = 128000
     
     def FixUnicodeError(self, text=u""):
@@ -36,16 +34,12 @@ class Lua:
             text = text.decode()
         return text
 
-    def Permissions(self):
-        if self.owner is None: 
+    def CheckPerms(self, function):
+        if self.owner == None or self.owner.isLuaCrew or self.owner.privLevel in [9, 3]:
             return True
-        if self.owner.isLuaCrew or self.owner.privLevel == 9 or self.owner.privLevel == 3 or self.owner.isLuaCrew:
-            return True
+        self.owner.playerException.Invoke("notallowedlua", self.owner.playerName, function)
         return False
     
-    def Forbidden(self, function):
-        self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] <BL>%s</BL>" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str("You're not allowed to use the function "+str(function))))
-
     def htmlfix(self, text):
         if "<a" in text:
             if not "</a>" in text:
@@ -71,12 +65,12 @@ class Lua:
         for key, value in array.items():
             callback(key, value)
                
-    def sendLuaMessage(self, *args):
+    def sendLuaMessage(self, *args): ##############
         message = ""
         for x in args:
-            message += (self.globals.tostring(x) if self.globals.type(x) != "userdata" else "userdata") + ("  " if len(args)>1 else "")
-        if message != "" and not self.owner is None:
-            self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] %s" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str(message)))
+            message += (self.globals.tostring(x) if self.globals.type(x) != "userdata" else "userdata") + ("  " if len(args) > 1 else "")
+        if message and self.owner:
+            self.owner.sendLuaMessage(message)
 
     def EventLoop(self):
         if not self.runtime is None:
@@ -87,7 +81,7 @@ class Lua:
 
             self.server.loop.call_later(0.5, self.EventLoop)
 
-    def SetupRuntimeGlobals(self):
+    def SetupRuntimeGlobals(self): ##############
         if self.runtime is None: 
             return
         self.globals = self.runtime.globals()
@@ -106,7 +100,7 @@ class Lua:
         self.globals['os']['execute'] = None
         self.globals['os']['setlocale'] = None
         self.globals['os']['time'] = lambda: int(time.time() * 1000)
-        self.globals['string']['rep'] = lambda t, x: str(t * int(x))
+        #self.globals['string']['rep'] = lambda t, x: str(t * int(x))
         self.globals['print'] = self.sendLuaMessage
 
         self.globals['math']['abs'] = abs
@@ -128,7 +122,7 @@ class Lua:
         self.globals['math']['min'] = min
         self.globals['math']['modf'] = math.modf
         self.globals['math']['pi'] = math.pi
-        self.globals['math']['pow'] = math.pow
+        self.globals['math']['pow'] = pow
         self.globals['math']['rad'] = math.radians
         self.globals['math']['random'] = random.random
         self.globals['math']['randomseed'] = random.seed
@@ -143,7 +137,7 @@ class Lua:
         self.globals['system']['bindMouse'] = self.room.bindMouse
         self.globals['system']['disableChatCommandDisplay'] = self.disableChatCommandDisplay
         self.globals['system']['exit'] = self.stopModule
-        self.globals['system']['giveEventGift'] = self.giveEventGift
+        #self.globals['system']['giveEventGift'] = self.giveEventGift
         self.globals['system']['loadFile'] = self.loadFile
         self.globals['system']['loadPlayerData'] = self.loadPlayerData
         self.globals['system']['newTimer'] = self.newTimer
@@ -176,7 +170,8 @@ class Lua:
         self.globals['tfm']['exec']['addBonus'] = self.addBonus
         self.globals['tfm']['exec']['addConjuration'] = self.addConjuration
         self.globals['tfm']['exec']['addImage'] = self.addImage
-        self.globals['tfm']['exec']['addJoint'] = self.addJoint
+        #self.globals['tfm']['exec']['addJoint'] = self.addJoint
+        self.globals['tfm']['exec']['addNPC'] = self.room.spawnNPC
         self.globals['tfm']['exec']['addPhysicObject'] = self.room.addPhysicObject
         self.globals['tfm']['exec']['addShamanObject'] = self.addShamanObject
         self.globals['tfm']['exec']['attachBalloon'] = self.attachBalloon
@@ -210,13 +205,14 @@ class Lua:
         self.globals['tfm']['exec']['playerVictory'] = self.playerVictory
         self.globals['tfm']['exec']['removeBonus'] = self.removeBonus
         self.globals['tfm']['exec']['removeCheese'] = self.removeCheese
-        self.globals['tfm']['exec']['removeImage'] = self.removeImage #kkkkkk
+        #self.globals['tfm']['exec']['removeImage'] = self.removeImage
         self.globals['tfm']['exec']['removeJoint'] = self.removeJoint
         self.globals['tfm']['exec']['removeObject'] = self.room.removeObject
         self.globals['tfm']['exec']['removePhysicObject'] = self.RemovePhysicObject
         self.globals['tfm']['exec']['respawnPlayer'] = self.respawnPlayer
         self.globals['tfm']['exec']['setAutoMapFlipMode'] = self.setAutoMapFlipMode
         self.globals['tfm']['exec']['setGameTime'] = self.setGameTime
+        self.globals['tfm']['exec']['setPlayerNightMode'] = self.setPlayerNightMode
         self.globals['tfm']['exec']['setNameColor'] = self.room.setNameColor
         self.globals['tfm']['exec']['setPlayerScore'] = self.setPlayerScore
         self.globals['tfm']['exec']['setPlayerSync'] = self.setPlayerSync
@@ -227,8 +223,10 @@ class Lua:
         self.globals['tfm']['exec']['setUIShamanName'] = self.setShamanName
         self.globals['tfm']['exec']['setVampirePlayer'] = self.setVampirePlayer
         self.globals['tfm']['exec']['setWorldGravity'] = self.setWorldGravity
+        
+        self.globals['tfm']['exec']['setAieMode'] = self.setAieMode
+        
         self.globals['tfm']['exec']['snow'] = self.snow
-
         self.globals['tfm']['get']['misc']['apiVersion'] = "0.28"
         self.globals['tfm']['get']['misc']['transformiceVersion'] = self.server.Version
 
@@ -438,63 +436,46 @@ class Lua:
         elif command in self.HiddenCommands and not hidden:
             self.HiddenCommands.remove(self.FixUnicodeError(command))
 
-    def loadFile(self, id):
-        if self.Permissions() == True:
+    def loadFile(self, id=0):
+        if self.CheckPerms("system.loadFile"):
             data = ""
-            try:
-                with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "r") as f:
-                    data = f.read()
-                    if data == None:
-                        data = ""
-            except:
-                data = ""
-            self.emit("FileLoaded", (self.owner.playerName, data))
+            with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "r") as f:
+                data = f.read()
+            self.emit("FileLoaded", (id, data))
             return data != ""
-        else:
-            self.Forbidden("system.loadFile")
 
     def loadPlayerData(self, playerName):
-        if self.Permissions() == True:
+        if self.CheckPerms("system.loadPlayerData"):
             data = ""
-            try:
-                with open(f"./include/lua/playerDatas/{playerName}", "r") as f:
-                    data = f.read()
-                    if data == None:
-                        data = ""
-            except:
-                    data = ""
+            with open(f"./include/lua/playerDatas/{playerName}", "r") as f:
+                data = f.read()
             self.emit("PlayerDataLoaded", (playerName, data))
             return data != ""
-        else:
-            self.Forbidden("system.loadPlayerData")
         
-    def newTimer(self, callback, _time=0, loop=False, *args):
-        _time = _time / 1000
-        if loop:
-            self.lastloopid+=1
-            d = self.createLoop(self.lastloopid, _time, lambda: callback(*args))
-            self.loops[self.lastloopid] = d
-            return self.lastloopid
-        else:
-            self.lastloopid+=1
-            d = self.server.loop.call_later(_time, lambda: callback(*args))
+    def newTimer(self, callback, _time, loop=False, *args):
+        if self.CheckPerms("system.removeTimer"):
+            _time = _time / 1000
+            if loop:
+                self.lastloopid += 1
+                d = self.createLoop(self.lastloopid, _time, lambda: callback(*args))
+            else:
+                self.lastloopid += 1
+                d = self.server.loop.call_later(_time, lambda: callback(*args))
             self.loops[self.lastloopid] = d
             return self.lastloopid
 
     def removeTimer(self, _id):
-        if self.Permissions() == True:
+        if self.CheckPerms("system.removeTimer"):
             _id = int(_id)
             if _id in self.loops:
                 self.loops[_id].cancel()
                 while _id in self.loops:
                     del self.loops[_id]
-        else:
-            self.Forbidden("system.removeTimer")
 
-    def saveFile(self, data, id):
-        if self.Permissions() == True:
+    def saveFile(self, data, id=0):
+        if self.CheckPerms("system.saveFile"):
             if len(data) > self.maxData:
-                return
+                return False
             try:
                 with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "a+") as f:
                     f.write(data)
@@ -503,27 +484,25 @@ class Lua:
                 os.mkdir(os.path.join("./include/lua/playerDatas/module-team/", self.owner.playerName), 0o6666)
                 with open(f"./include/lua/playerDatas/module-team/{self.owner.playerName}/{id}", "a+") as f:
                     f.write(data)
-            self.emit("FileSaved", (self.owner.playerName, data))
-        else:
-            self.Forbidden("system.saveFile")
+            self.emit("FileSaved", (id))
+            return True
 
     def savePlayerData(self, playerName, data):
-        if self.Permissions() == True:
+        if self.CheckPerms("system.savePlayerData"):
             if len(data) > self.maxData:
                 return
             with open(f"./include/lua/playerDatas/{playerName}", "a+") as f:
                 f.write(data)
-        else:
-            self.Forbidden("system.savePlayerData")
 
     ### ui. Functions
-    def addLog(self, text, playerName):
-        if self.Permissions() == True:
-            player = self.room.clients.get(playerName)
-            if player != None:
-                player.sendLogMessage(text)
-        else:
-            self.Forbidden("ui.addLog")
+    def addLog(self, text, playerName=""):
+        if self.CheckPerms("ui.addLog"):
+            if playerName == "":
+                self.owner.sendLogMessage(text)
+            else:
+                player = self.room.clients.get(self.server.players.get(Utils.parsePlayerName(playerName)))
+                if player != None:
+                    player.sendLogMessage(text)
 
     def setMapName(self, message=""):
         self.room.sendAll(Identifiers.send.Set_Map_Name, ByteArray().writeUTF(str(message)).toByteArray())
@@ -541,17 +520,17 @@ class Lua:
         p.writeInt(id)
         p.writeBoolean(visible)
         if targetPlayer == "" or not targetPlayer:
-            self.room.sendAll([5, 14], p.toByteArray())
+            self.room.sendAll(Identifiers.send.Skill_Object, p.toByteArray())
         else:
             player = self.room.clients.get(targetPlayer)
             if player != None:
-                player.sendPacket([5, 14], p.toByteArray())
+                player.sendPacket(Identifiers.send.Skill_Object, p.toByteArray())
 
     def addConjuration(self, x, y, duration=10000):
         self.room.sendAll(Identifiers.old.send.Add_Conjuration, [x, y, duration])
         self.server.loop.call_later(duration / 1000, self.room.sendAll, Identifiers.old.send.Conjuration_Destroy, [int(x), int(y)])
 
-    def addImage(self, imageName, target, xPosition = 50, yPosition = 50, targetPlayer = "", scaleX = 1, scaleY = 1, angle = 0, alpha = 1, AnchorX = 0, AnchorY = 0):
+    def addImage(self, imageName, target, xPosition = 0, yPosition = 0, targetPlayer = "", scaleX = 1, scaleY = 1, angle = 0, alpha = 1, AnchorX = 0, AnchorY = 0):
         packet = ByteArray()
         self.room.lastImageID += 1
         packet.writeInt(self.room.lastImageID)
@@ -569,13 +548,7 @@ class Lua:
             if player != None:
                 player.sendPacket(Identifiers.send.Add_Image, packet.toByteArray())
 
-    def addJoint(self, id, ground1, ground2, jointDefinition):
-        pass
-        #self.room.sendAll(Identifiers.send.Add_Joint, [id, ground1, ground2, jointDefinition])
-        
-        #self.sendAll(Identifiers.send.Add_Physic_Object, ByteArray().writeShort(id).writeBoolean(bool(bodyDef["dynamic"]) if "dynamic" in bodyDef else False).writeByte(int(bodyDef["type"]) if "type" in bodyDef else 0).writeShort(x).writeShort(y).writeShort(int(bodyDef["width"]) if "width" in bodyDef else 0).writeShort(int(bodyDef["height"]) if "height" in bodyDef else 0).writeBoolean(bool(bodyDef["foreground"]) if "foreground" in bodyDef else False).writeShort(int(bodyDef["friction"]) if "friction" in bodyDef else 0).writeShort(int(bodyDef["restitution"]) if "restitution" in bodyDef else 0).writeShort(int(bodyDef["angle"]) if "angle" in bodyDef else 0).writeBoolean("color" in bodyDef).writeInt(int(bodyDef["color"]) if "color" in bodyDef else 0).writeBoolean(bool(bodyDef["miceCollision"]) if "miceCollision" in bodyDef else True).writeBoolean(bool(bodyDef["groundCollision"]) if "groundCollision" in bodyDef else True).writeBoolean(bool(bodyDef["fixedRotation"]) if "fixedRotation" in bodyDef else False).writeShort(int(bodyDef["mass"]) if "mass" in bodyDef else 0).writeShort(int(bodyDef["linearDamping"]) if "linearDamping" in bodyDef else 0).writeShort(int(bodyDef["angularDamping"]) if "angularDamping" in bodyDef else 0).writeBoolean(False).writeUTF("").writeBoolean(False).toByteArray())
-
-    def addShamanObject(self, type=0, x=0, y=0, angle=0, vx=0, vy=0, ghost=False, options=[]):
+    def addShamanObject(self, type=0, x=0, y=0, angle=0, vx=0, vy=0, ghost=False, options={}):
         self.LastRoomObjectID += 1
         _id = self.LastRoomObjectID
         self.RoomObjects[_id] = {'id': _id, 'type': type, 'angle': angle, 'ghost': ghost, 'velX': vx, 'velY': vy, 'posX': x, 'posY': y, 'rotationSpeed':(vx+vy)/2, 'stationary': (vx == 0 and vy == 0)}
@@ -590,12 +563,14 @@ class Lua:
         p.writeByte(vy)
         p.writeBoolean(not ghost)
         p.writeByte(0)
+        p.writeInt(options["fixedXSpeed"] if "fixedXSpeed" in options else 0)
+        p.writeInt(options["fixedYSpeed"] if "fixedYSpeed" in options else 0)
         self.room.sendAll(Identifiers.send.Spawn_Object, p.toByteArray())
         return _id
 
     def attachBalloon(self, playerName, isAttached=True, colorType=1, ghost=False, speed=1):
         colorType = 4 if colorType > 4 else 1 if colorType < 1 else colorType
-        player = self.server.players.get(playerName)
+        player = self.server.players.get(self.server.players.get(Utils.parsePlayerName(playerName)))
         if player != None:
             p = self.room.objectID + 1
             player.sendPlaceObject(p,28,player.posX,player.posY-25,0,0,0,not ghost,True,colorType)
@@ -607,17 +582,12 @@ class Lua:
         size = float(size)
         size = 5.0 if size > 5.0 or size < 0.1 else size
         size = int(size * 100)
-        playerName = Utils.parsePlayerName(name)
-        if playerName == "*":
-            for player in self.room.clients.copy().values():
-                self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
-        else:
-            player = self.server.players.get(playerName)
-            if player != None:
-                self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
+        player = self.server.players.get(Utils.parsePlayerName(name))
+        if player != None:
+            self.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeShort(size).writeBoolean(False).toByteArray())
 
     def chatMessage(self, message, target=""):
-        if self.Permissions() == True:
+        if self.CheckPerms("tfm.exec.chatMessage") == True:
             if target == "":
                 for player in self.room.clients.values():
                     player.sendMessage(self.FixUnicodeError(message))
@@ -626,18 +596,15 @@ class Lua:
 
                 if player != None:
                     player.sendMessage(self.FixUnicodeError(message))
-        else:
-            self.Forbidden("tfm.exec.chatMessage")
 
     def disableAfkDeath(self, status=True):
         self.room.disableAfkKill = status
         
     def disableAllShamanSkills(self, status=True):
-        self.room.noShamanSkills = status
+        self.room.noShamanSkills = int(status)
 
     def disableAutoNewGame(self, status=True):
         self.room.isFixedMap = status
-        self.roomFix = status
         
     def disableAutoScore(self, status=True):
         self.room.noAutoScore = status
@@ -648,10 +615,10 @@ class Lua:
     def disableAutoTimeLeft(self, status=True):
         self.room.never20secTimer = status
     
-    def disableMortCommand(self, status=False):
+    def disableMortCommand(self, status=True):
         self.room.disableMortCommand = status
         
-    def disablePhysicalConsumables(self, status=False):
+    def disablePhysicalConsumables(self, status=True):
         self.room.disablePhysicalConsumables = status
     
     def displayParticle(self, particleType, xPosition, yPosition, xSpeed=0, ySpeed=0, xAcceleration=0, yAcceleration=0, targetPlayer=""):
@@ -675,51 +642,39 @@ class Lua:
             player.sendPacket([5, 17], [int(x), int(y), int(power), int(distance), bool(miceOnly)])
 
     def freezePlayer(self, playerName, freeze=True, displayIce=True):
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
         if player:
-            player.sendPacket([100, 66], ByteArray().writeBoolean(freeze).writeBoolean(displayIce).toByteArray())
+            player.sendPacket(Identifiers.send.Stop_Moving, ByteArray().writeBoolean(freeze).writeBoolean(displayIce).toByteArray())
 
     def getPlayerSync(self):
-        if self.Permissions() == True:
+        if self.CheckPerms("tfm.exec.getPlayerSync") == True:
             self.chatMessage("Current Sync: "+self.room.currentSyncName, self.owner.playerName)
             return self.room.currentSyncName
-        else:
-            self.Forbidden("tfm.exec.getPlayerSync")
 
     def giveCheese(self, target):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(target))
         if player != None and not player.isDead and not player.hasCheese:
             player.sendGiveCheese(0)
 
     def giveConsumables(self, playerName, consumableId, amount=1):
-        if self.Permissions() == True:
-            player = self.room.clients.get(playerName)
+        if self.CheckPerms("tfm.exec.giveConsumables"):
+            player = self.room.clients.get(Utils.parsePlayerName(playerName))
             if player:
                 player.giveConsumable(consumableId, amount)
-        else:
-            self.Forbidden("tfm.exec.giveConsumables")
 
     def giveMeep(self, target, status=True):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(target))
         if player != None and not player.isDead:
             player.sendPacket(Identifiers.send.Can_Meep, status)
 
     def giveTransformations(self, target, status=True):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(target))
         if player != None:
-            if status == True:
-                player.sendPacket([27, 10], 1)
-                player.hasLuaTransformations = True
-            else:
-                player.sendPacket([27, 10], 0)
-                player.hasLuaTransformations = False
+            player.sendPacket(Identifiers.send.Can_Transformation, int(status))
+            player.hasLuaTransformations = status
 
     def killPlayer(self, target):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(target))
         if not player.isDead:
             player.isDead = True
             if player.room.noAutoScore:
@@ -728,21 +683,16 @@ class Lua:
             player.room.checkChangeMap()
 
     def linkMice(self, Name, Target, status=True):
-        player = self.server.players.get(Name)
-        player1 = self.server.players.get(Target)
+        player = self.server.players.get(Utils.parsePlayerName(Name))
+        player1 = self.server.players.get(Utils.parsePlayerName(Target))
         if player != None and player1 != None:
-            if status == True:
-                self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(status).writeInt(player.playerCode).writeInt(player1.playerCode).toByteArray())
-            else:
-                self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(status).writeInt(player.playerCode).toByteArray())
-            
+            self.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(status).writeInt(player.playerCode).writeInt(player1.playerCode if status else -1).toByteArray())
+
     def lowerSyncDelay(self, playerName):
-        if self.Permissions() == True:
-            player = self.server.players.get(playerName)
+        if self.CheckPerms("tfm.exec.lowerSyncDelay") == True:
+            player = self.server.players.get(Utils.parsePlayerName(playerName))
             if player != None:
                 player.sendPacket(Identifiers.send.Lower_Sync_Delay, [player.playerName])
-        else:
-            self.Forbidden("tfm.exec.lowerSyncDelay")
 
     def moveCheese(self, x, y):
         self.room.sendAll(Identifiers.old.send.Move_Cheese, [x, y])
@@ -772,47 +722,39 @@ class Lua:
 
         self.room.changeMapTimers(0)
         self.room.canChangeMap = True
-        if self.roomFix:
-            self.room.isFixedMap = True
         if self.room.changeMapTimer != None:
             self.room.changeMapTimer.cancel()
         self.room.mapChange()
-        if self.roomFix:
-            self.room.isFixedMap = True
 
     def playEmote(self, playerName, emoteId, emoteArg=""):
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
         if player:
             player.sendPlayerEmote(emoteId, emoteArg, False, True)
 
     def playerVictory(self, target):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
-
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
         if player != None and not player.isDead:
             if not player.hasCheese:
                 self.giveCheese(playerName)
-
             player.playerWin(1, 0)
 
     def removeBonus(self, id=0, targetPlayer=""):
         p = ByteArray().writeInt(id)
-        if targetPlayer == "" or not targetPlayer:
+        if targetPlayer == "":
             self.room.sendAll([5, 15], p.toByteArray())
         else:
-            player = self.room.clients.get(targetPlayer)
+            player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
             if player != None:
                 player.sendPacket([5, 15], p.toByteArray())
               
     def removeCheese(self, target):
-        playerName = Utils.parsePlayerName(target)
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
         if player != None and not player.isDead and player.hasCheese:
             player.hasCheese = False
             player.sendRemoveCheese()
               
-    def removeImage(self, imageId):
-        self.room.sendAll(Identifiers.send.Add_Image, ByteArray().writeInt(imageId).toByteArray())
+    #def removeImage(self, imageId): #########
+        #self.room.sendAll(Identifiers.send.Add_Image, ByteArray().writeInt(imageId).toByteArray())
         
     def removeJoint(self, id):
         self.room.sendAll(Identifiers.send.Remove_Joint, [id])
@@ -820,12 +762,18 @@ class Lua:
     def RemovePhysicObject(self, id):
         self.room.sendAll(Identifiers.send.Remove_Physic_Object, [id])
 
-    def respawnPlayer(self, target):
-        playerName = Utils.parsePlayerName(target)
-        if playerName in self.room.clients:
+    def respawnPlayer(self, playerName):
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
+        if player != None:
             self.room.respawnSpecific(playerName)
 
-
+    def setAieMode(self, enable=True, sensibility=1, targetPlayer=""):
+        if targetPlayer == "":
+            self.room.sendAll(Identifiers.send.setAIEMode, ByteArray().writeBoolean(enable).writeInt(sensibility).toByteArray())
+        else:
+            player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
+            if player != None:
+                player.sendPacket(Identifiers.send.setAIEMode, ByteArray().writeBoolean(enable).writeInt(sensibility).toByteArray())
 
     def setAutoMapFlipMode(self, status=False):
         self.room.autoMapFlipMode = status
@@ -843,10 +791,18 @@ class Lua:
             self.room.roundTime = iTime
             self.room.changeMapTimers(iTime)
 
+    def setPlayerNightMode(self, enable=True, playerName=""):
+        if playerName == "":
+            self.room.sendAll(Identifiers.send.NightMode, ByteArray().writeBoolean(enable).toByteArray())
+        else:
+            player = self.room.clients.get(Utils.parsePlayerName(playerName))
+            if player != None:
+                player.sendPacket(Identifiers.send.NightMode, ByteArray().writeBoolean(enable).toByteArray())
+
     def setPlayerScore(self, playerName, score, amount=False):
         if amount is None:
             amount = False
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
         if player:
             if amount:
                 player.playerScore += score
@@ -855,51 +811,39 @@ class Lua:
             self.room.sendAll(Identifiers.send.Set_Player_Score, ByteArray().writeInt(player.playerCode).writeShort(player.playerScore).toByteArray())
 
     def setPlayerSync(self, playerName):
-        if self.Permissions() == True:
-            player = self.room.clients.get(playerName)
+        if self.CheckPerms("tfm.exec.setPlayerSync") == True:
+            player = self.room.clients.get(Utils.parsePlayerName(playerName))
             if player != None:
                 player.isSync = True
                 self.room.currentSyncCode = player.playerCode
                 self.room.currentSyncName = player.playerName
                 self.chatMessage("New Sync: "+str(player.playerName), self.owner.playerName)
-        else:
-            self.Forbidden("tfm.exec.setPlayerSync")
 
     def setRoomMaxPlayers(self, maxPlayers):
-        if self.Permissions() == True:
+        if self.CheckPerms("tfm.exec.setRoomMaxPlayers") == True:
             if maxPlayers > 0:
                 self.room.maxPlayers = maxPlayers
-        else:
-            self.Forbidden("tfm.exec.setRoomMaxPlayers")
 
     def setRoomPassword(self, password):
-        if self.Permissions() == True:
-            if len(password) > 0:
-                self.room.roomPassword = password
-            else:
-                self.room.roomPassword = ""
-        else:
-            self.Forbidden("tfm.exec.setRoomPassword")
+        if self.CheckPerms("tfm.exec.setRoomPassword"):
+            self.room.roomPassword = password if len(password) > 0 else ""
 
-    def setShaman(self, target):
+    def setShaman(self, target, makeAShaman=True):
         player = self.room.clients.get(Utils.parsePlayerName(target))
         if player != None:
             player.isShaman = True
             self.room.sendAll(Identifiers.send.New_Shaman, ByteArray().writeInt(player.playerCode).writeByte(player.shamanType).writeShort(player.shamanLevel).writeShort(player.Skills.getShamanBadge()).toByteArray())
 
     def setVampirePlayer(self, playerName, status=True):
-        player = self.room.clients.get(playerName)
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
         if player != None:
             player.sendVampireMode(status)
             
     def setWorldGravity(self, x=0, y=10):
-        for player in self.server.players.values():
-            if x == 0:
-                player.room.sendAll(Identifiers.old.send.Gravity, [0, y])
-            elif y == 0:
-                player.room.sendAll(Identifiers.old.send.Gravity, [x, 8])
-            else:
-                player.room.sendAll(Identifiers.old.send.Gravity, [x, y])
+        if y == 0:
+            self.room.sendAll(Identifiers.old.send.Gravity, [x, 8])
+        else:
+            self.room.sendAll(Identifiers.old.send.Gravity, [x, y])
     
     def snow(self, time=60, power=10):
         self.room.startSnow(time, power, not self.room.isSnowing)
@@ -939,22 +883,20 @@ class Lua:
             args_strPack = (str(args) if type(args) != str and type(args) != bool else '"%s"' % (args) if type(args) != bool else ("true" if args else "false")) + ","
 
         try:
-            if (eventName == "FileLoaded" or eventName == "FileSaved" or eventName == "PlayerDataLoaded") and self.Permissions() == True:
+            if eventName in ["FileLoaded", "FileSaved", "PlayerDataLoaded"] and self.CheckPerms("") == True:
                 self.runtime.execute("if(event%s)then event%s(%s) end" % (str(eventName), str(eventName), args_strPack[:-1]))
-            elif eventName != "FileLoaded" and eventName != "FileSaved" and eventName != "PlayerDataLoaded":
+            elif eventName not in ["FileLoaded", "FileSaved", "PlayerDataLoaded"]:
                 self.runtime.execute("if(event%s)then event%s(%s) end" % (str(eventName), str(eventName), args_strPack[:-1]))
-            else:
-                Forbidden(str(eventName))
         except Exception as error:
             if not self.owner is None:
                 self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] <BL>%s</BL>" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str(error)))
    
-    def stopModule(self, playerName="", action=0):
+    def stopModule(self, playerName="", action=0): ##############
         self.room.isMinigame = False
         self.room.minigame = None
         self.runtime = None
         self.running = False
-        self.room.startSnow(0, 10, False)
+        #self.room.startSnow(0, 10, False)
 
         if self.room.isTribeHouse:
             self.room.countStats = False
@@ -990,13 +932,6 @@ class Lua:
             if not self.room.minigame.owner is None:
                 self.room.minigame.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] %s by: <J>%s</J>" % (playerName, str(time.strftime("%H:%M:%S")), "Module stopped" if action == 0 else "Another module was loaded", str(playerName)))
 
-    def giveEventGift(self, playerName, gift=""):
-        if self.Permissions() == True:
-            pass
-            
-        else:
-            self.Forbidden("system.giveEventGift")
-
     def RunCode(self, code=""):
         #if self.running:
             #self.stopModule()
@@ -1015,22 +950,18 @@ class Lua:
              #}
             # while(__while__%s:callback())do""" % (id, while_stmt[5:-2], id))
     
-        if self.runtime is None:
+        if self.runtime == None:
             self.runtime = LuaRuntime()
             self.SetupRuntimeGlobals()
-
         try:
             ts = time.time()
             self.runtime.execute(code)
             self.EventLoop()
             te = time.time() - ts
-
-            if not self.owner is None:
-                self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] Script loaded in <J>%.2f</J>s." % (self.owner.playerName, str(time.strftime("%H:%M:%S")), te))
-
+            if self.owner != None:
+                self.owner.sendLuaMessage(f"[<V>{self.owner.roomName}</V>] [{self.owner.playerName}] Script loaded in {math.ceil(te*1000)} ms. (4000 max)")
             self.script = code
         except Exception as error:
             self.script = ""
-
-            if not self.owner is None:
-                self.owner.sendLuaMessage("[<V>%s.lua</V>][<N>%s</N>] <BL>%s</BL>" % (self.owner.playerName, str(time.strftime("%H:%M:%S")), str(error)))
+            if self.owner != None:
+                self.owner.sendLuaMessage(f"[<V>{self.owner.roomName}</V>] [{self.owner.playerName}] {error}")

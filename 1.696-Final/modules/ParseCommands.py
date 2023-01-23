@@ -35,7 +35,7 @@ class Commands:
     
     def requireArguments(self, arguments, flag=False):
         if self.currentArgsCount < arguments:
-            self.client.GameException.Invoke("moreargs")
+            self.client.playerException.Invoke("moreargs")
             return False
         elif self.currentArgsCount == arguments:
             return True
@@ -257,8 +257,7 @@ class Commands:
 
             elif command in ["sy"]:
                 if((self.client.privLevel in [6, 9] or self.client.isMapCrew == True) or self.requireTribePerm(2046)) and self.requireArguments(1):
-                    playerName = Utils.parsePlayerName(args[0])
-                    player = self.server.players.get(playerName)
+                    player = self.server.players.get(Utils.parsePlayerName(args[0]))
                     if player != None:
                         player.isSync = True
                         self.client.room.currentSyncCode = player.playerCode
@@ -270,12 +269,11 @@ class Commands:
                             self.client.sendPacket(Identifiers.old.send.Sync, [player.playerCode])
                             self.client.sendLangueMessage("", "$NouveauSync <V> %s" %(player.playerName))
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
             
             elif command in ["ch"]:
                 if (self.client.privLevel in [6, 9] or self.client.requireTribePerm(2046) or self.client.isMapCrew == True or self.client.room.roomName == "*strm_" + self.client.playerName.lower()) and self.requireArguments(1):
-                    playerName = Utils.parsePlayerName(args[0])
-                    player = self.server.players.get(playerName)
+                    player = self.server.players.get(Utils.parsePlayerName(args[0]))
                     if player != None:
                         if self.client.room.forceNextShaman == player.playerCode:
                             self.client.sendLangueMessage("", "$PasProchaineChamane", player.playerName)
@@ -284,9 +282,9 @@ class Commands:
                             self.client.sendLangueMessage("", "$ProchaineChamane", player.playerName)
                             self.client.room.forceNextShaman = player.playerCode
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
             
-            elif command in ["csr"]:
+            elif command in ["csr"]: #########
                 if (self.client.privLevel in [6, 9] or self.client.isMapCrew == True) and self.requireTribePerm(2046):
                     ml = []
                     for room in self.server.rooms.values():
@@ -383,7 +381,7 @@ class Commands:
                             self.client.sendClientMessage('Sucessfull enabled the room color.', 1)
                             self.client.room.isFuncorpRoomName = True
                     else:
-                        self.client.GameException.Invoke("requireFC")
+                        self.client.playerException.Invoke("requireFC")
 
             elif command in ["transformation"]: 
                 if(self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) and self.requireArguments(1, True):
@@ -416,7 +414,7 @@ class Commands:
                                 res = ", ".join(dump)
                                 self.client.sendClientMessage("Transformations powers removed to players: <BV>"+res+"</BV>", 1)
                     else:
-                        self.client.GameException.Invoke("requireFC")
+                        self.client.playerException.Invoke("requireFC")
 
             elif command in ["changesize"]:
                 if (self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) and self.requireArguments(1, True):
@@ -456,7 +454,7 @@ class Commands:
                                 self.client.sendClientMessage("The following players now have their regular size: <BV>"+res+"</BV>", 1)
 
                     else:
-                        self.client.GameException.Invoke("requireFC")
+                        self.client.playerException.Invoke("requireFC")
 
             elif command in ["meep"]:
                 if (self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) and self.requireArguments(1, True):
@@ -490,7 +488,7 @@ class Commands:
                                 res = ", ".join(dump)
                                 self.client.sendClientMessage("Meep powers removed from players: <BV>"+res+"</BV>", 1)
                     else:
-                        self.client.GameException.Invoke("requireFC")
+                        self.client.playerException.Invoke("requireFC")
       
             elif command in ["changenick"]: 
                 if(self.client.privLevel in [5, 9] or self.client.isFuncorpPlayer == True) and self.requireArguments(2):
@@ -508,7 +506,7 @@ class Commands:
                                 self.client.room.funcorpNames[player.playerName] = newName
                                 self.client.sendClientMessage("The following player has changed his nickname: <BV>"+ str(player.playerName) +"</BV>", 1)
                     else:
-                        self.client.GameException.Invoke("requireFC")
+                        self.client.playerException.Invoke("requireFC")
               
             elif command in ["linkmice"]:
                 if (self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) and self.requireArguments(2, True):
@@ -530,7 +528,7 @@ class Commands:
                                 if player2 != None:
                                     self.client.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(True).writeInt(player.playerCode).writeInt(player2.playerCode).toByteArray())
                     else:
-                        self.client.GameException.Invoke("requireFC")
+                        self.client.playerException.Invoke("requireFC")
               
 # MapCrew Commands:
             elif command in ["lsmc"]:
@@ -687,9 +685,9 @@ class Commands:
                         self.client.sendServerMessage(f"{self.client.playerName} unbanned the player {playerName}.")
                         self.server.saveCasier(playerName, "UNBAN", self.client.playerName, "", "")
                     elif result == -1:
-                        self.client.GameException.Invoke("usernotbanned", playerName)
+                        self.client.playerException.Invoke("usernotbanned", playerName)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["ban"]:
                 if self.client.privLevel >= 1 or self.client.room.roomName == "*strm_" + self.client.playerName.lower() and self.requireArguments(1, True):
@@ -715,9 +713,9 @@ class Commands:
                                     self.client.sendServerMessage(f"{self.client.playerName} offline banned the player {playerName} for {hours}h ({reason}).")
                                     self.server.banPlayer(playerName, hours, reason, self.client.playerName, False)
                             elif result == 1:
-                                self.client.GameException.Invoke("useralreadybanned", playerName)
+                                self.client.playerException.Invoke("useralreadybanned", playerName)
                             else:
-                                self.client.GameException.Invoke("unknownuser")
+                                self.client.playerException.Invoke("unknownuser")
 
             elif command in ["iban"]:
                 if self.client.privLevel >= 7 and self.requireArguments(3, True):
@@ -735,9 +733,9 @@ class Commands:
                             self.client.sendServerMessage(f"{self.client.playerName} offline banned the player {playerName} for {hours}h ({reason}).")
                             self.server.banPlayer(playerName, hours, reason, self.client.playerName, True)
                     elif result == 1:
-                        self.client.GameException.Invoke("useralreadybanned", playerName)
+                        self.client.playerException.Invoke("useralreadybanned", playerName)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["chatlog"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -754,7 +752,7 @@ class Commands:
                         self.server.banPlayer(player.playerName, hours, reason, self.client.playerName, False)
                         self.client.sendServerMessage("%s banned the player %s for %sh (%s)" %(self.client.playerName, playerName, hours, reason))
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
                    
             elif command in ["ibanhack"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -767,14 +765,14 @@ class Commands:
                         self.server.banPlayer(player.playerName, hours, reason, self.client.playerName, True)
                         self.client.sendServerMessage("%s banned the player %s for %sh (%s)" %(self.client.playerName, playerName, hours, reason))
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
                    
             elif command in ["mute"]:
                 if self.client.privLevel >= 7 and self.requireArguments(3, True):
                     playerName = Utils.parsePlayerName(args[0])
                     if self.server.checkExistingUser(playerName):
                         if self.server.checkTempMute(playerName):
-                            self.client.GameException.Invoke("useralreadymuted")
+                            self.client.playerException.Invoke("useralreadymuted")
                         else:
                             time = args[1] if (len(args) >= 2) else ""
                             reason = argsNotSplited.split(" ", 2)[2] if (len(args) >= 3) else ""
@@ -782,14 +780,14 @@ class Commands:
                             hours = 9999999 if (hours > 9999999) else hours
                             self.server.mutePlayer(playerName, hours, reason, self.client.playerName, True)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["imute"]:
                 if self.client.privLevel >= 7 and self.requireArguments(3, True):
                     playerName = Utils.parsePlayerName(args[0])
                     if self.server.checkExistingUser(playerName):
                         if self.server.checkTempMute(playerName):
-                            self.client.GameException.Invoke("useralreadymuted")
+                            self.client.playerException.Invoke("useralreadymuted")
                         else:
                             time = args[1] if (len(args) >= 2) else ""
                             reason = argsNotSplited.split(" ", 2)[2] if (len(args) >= 3) else ""
@@ -797,7 +795,7 @@ class Commands:
                             hours = 9999999 if (hours > 9999999) else hours
                             self.server.mutePlayer(playerName, hours, reason, self.client.playerName, True, True)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["unmute", "demute"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -814,9 +812,9 @@ class Commands:
                                 self.server.reports[playerName]['muteReason'] = ""
                                 self.server.reports[playerName]['mutedBy'] = ""
                         else:
-                            self.client.GameException.Invoke("usernotmuted")
+                            self.client.playerException.Invoke("usernotmuted")
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["l"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -824,7 +822,7 @@ class Commands:
                         self.Cursor.execute("select DISTINCT(IP), Time, IPColor, Country, Community, ConnectionID from LoginLogs where Username = %s order by Time desc limit 0, 200", [args[0]])
                         r = self.Cursor.fetchall()
                         if r == None:
-                            self.client.GameException.Invoke("notloggedin", args[0])
+                            self.client.playerException.Invoke("notloggedin", args[0])
                         else:
                             message = "<p align='center'>Connection logs for player: <BL>"+args[0]+"</BL>\n</p>"
                             for rs in r:
@@ -848,7 +846,7 @@ class Commands:
                         self.client.sendServerMessage(player.playerName+" has been roomkicked from ["+str.lower(player.room.name)+"] by "+self.client.playerName+".")
                         player.enterRoom('1')
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
                         
             elif command in ["follow", "join"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -856,7 +854,7 @@ class Commands:
                     if player != None:
                         self.client.enterRoom(player.roomName)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["ninja"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -879,7 +877,7 @@ class Commands:
                             self.client.enterRoom(self.client.lastroom)
                             self.server.players[player.playerName].followed == None
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
                     
             elif command in ["ip"]:
                 if self.client.privLevel >= 7:
@@ -888,7 +886,7 @@ class Commands:
                     if player != None:
                         self.client.sendClientMessage(f"<BV>{playerName}</BV> -> {Utils.EncodeIP(player.ipAddress)} ({player.ipCountry})", 1)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
             
             elif command in ["kick"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -899,7 +897,7 @@ class Commands:
                         player.transport.close()
                         self.client.sendServerMessage("The player %s has been kicked by %s."%(playerName, self.client.playerName))
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["room*", "salon*", "sala*"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -920,7 +918,7 @@ class Commands:
                             player.voteBan = []
                             self.client.sendServerMessage("%s removed all ban votes of %s." %(self.client.playerName, playerName))
                         else:
-                             self.client.GameException.Invoke("unknownuser")
+                             self.client.playerException.Invoke("unknownuser")
 
             elif command in ["chatfilter"]:
                 if self.client.privLevel >= 7:
@@ -946,7 +944,7 @@ class Commands:
                                 self.server.serverList.append(name)
                                 self.client.sendClientMessage("The string <N>[%s]</N> has been added to the filter." %(name), 1)
                     except:
-                        self.client.GameException.Invoke("moreargs")
+                        self.client.playerException.Invoke("moreargs")
 
             elif command in ["mumute"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -991,7 +989,7 @@ class Commands:
                             ipList += "<br>" + rs[0]
                         self.client.sendClientMessage(ipList, 1)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["ipnom"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -1029,7 +1027,7 @@ class Commands:
                             player.isPrisoned = True
                             self.client.sendServerMessage(player.playerName+" prisoned by "+self.client.playerName+".")
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["casier"]:
                 if self.client.privLevel >= 7 and self.requireArguments(1):
@@ -1064,7 +1062,7 @@ class Commands:
                         except:
                             self.client.sendClientMessage("There has been an error when retrieving the list of sanctions of the player "+player.playerName+" : PARAMETRE_INVALIDE.", 1)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["closeroom"]:
                 if self.client.privLevel >= 7:
@@ -1191,7 +1189,7 @@ class Commands:
                             displayed.append(rs[0])
                         self.client.sendClientMessage(List, 1)
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
                    
             elif command in ["infotribu"]:
                 if self.client.privLevel >= 7:
@@ -1412,7 +1410,7 @@ class Commands:
                         player.room.removeClient(player)
                         player.transport.close()
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["harddel"]:
                 if self.client.privLevel >= 9:
@@ -1516,7 +1514,7 @@ class Commands:
                         self.Cursor.execute("delete from Users where Username = %s", [playerName])
                         self.client.sendServerMessageAdmin("The account %s is deleted by %s" % (playerName, self.client.playerName))
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
             elif command in ["resetmaps"]:
                 if self.client.playerName in self.owners and self.requireArguments(1):
@@ -1544,7 +1542,7 @@ class Commands:
                         player.room.removeClient(player)
                         player.transport.close()
                     else:
-                        self.client.GameException.Invoke("unknownuser")
+                        self.client.playerException.Invoke("unknownuser")
 
          
 # Predefined Commands in swf.
@@ -1584,6 +1582,14 @@ class Commands:
                             for code in [87,38,37,40,39,65,68,83]:
                                 player.sendPacket(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(code).writeBoolean(True).writeBoolean(True).toByteArray())
                                 player.sendPacket(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(code).writeBoolean(False).writeBoolean(True).toByteArray())
+                        
+            elif command in ["test"]:
+                #for code in range(101, 110):
+                #    for i in range(0, 256):
+                #        self.client.sendPacket([code, i], ByteArray().writeUTF(self.client.playerName).toByteArray())
+                #for code in range(140, 145):
+                self.client.sendPacket([144, 30], ByteArray().writeBoolean(True).writeInt(1).writeUTF("").toByteArray())
+                
                         
         except Exception as e:
             sex = ServerException(e)

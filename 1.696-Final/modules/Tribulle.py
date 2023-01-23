@@ -133,6 +133,7 @@ class Tribulle:
         if self.client.marriage == "":
             p.writeInt(0).writeUTF("").writeByte(0).writeInt(0).writeByte(0).writeByte(0).writeInt(1).writeUTF("").writeInt(0)
         else:
+            print(self.client.marriage)
             player = self.server.players.get(self.client.marriage)
             if player == None:
                 self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Marriage = %s", [self.client.marriage])

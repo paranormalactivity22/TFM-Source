@@ -42,8 +42,11 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Sync.Mouse_Movement:
-                packet2 = ByteArray().writeInt(self.client.playerCode).toByteArray() + packet.toByteArray()              
+                packet2 = ByteArray().writeInt(self.client.playerCode).toByteArray() + packet.toByteArray()
                 a, e = packet.readInt(), packet.readShort()
+                #a, droiteEnCours, packet.readInt(), packet.readBoolean()
+                #self.client.isMovingRight = droiteEnCours
+                #self.client.isMovingLeft = gaucheEnCours
                 if not self.client.posY == 0 and not self.client.posX == 0:
                     lasty, lastx = self.client.posY, self.client.posX
                 else:
@@ -106,7 +109,7 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Sync.Consumable_Object:
-                if self.client.room.currentSync != self.client:
+                if self.client.room.currentSyncName != self.client.playerName:
                     return
                 posX = packet.readShort();
                 posY = packet.readShort();
@@ -186,7 +189,7 @@ class Packets:
                         data["y"] = py
                         data["angle"] = angle
                         data["ghost"] = not dur
-                        self.client.room.luaRuntime.emit("eventSummoningEnd", (self.client.playerName, code, px, py, angle, vx, vy, data))
+                        self.client.room.luaRuntime.emit("SummoningEnd", (self.client.playerName, code, px, py, angle, vx, vy, data))
                 return
 
             elif CC == Identifiers.recv.Room.Ice_Cube:
@@ -212,7 +215,7 @@ class Packets:
             elif CC == Identifiers.recv.Room.Defilante_Points:
                 self.client.defilantePoints += 1
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventPlayerBonusGrabbed", (self.client.playerName, packet.readInt()))
+                    self.client.room.luaRuntime.emit("PlayerBonusGrabbed", (self.client.playerName, packet.readInt()))
                 return
 
             elif CC == Identifiers.recv.Room.Restorative_Skill:
@@ -226,7 +229,7 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Room.Gravitational_Skill:
-                velX, velY = packet.readShort(), packet.readShort()
+                velX, velY = packet.readInt(), packet.readInt()
                 self.client.Skills.sendGravitationalSkill(0, velX, velY)
                 return
 
@@ -325,21 +328,27 @@ class Packets:
                     packet.writeUTF(str(music["Title"].encode("UTF-8"))).writeUTF(str(music["By"].encode("UTF-8")))
                 self.client.sendPacket(Identifiers.send.Music_PlayList, packet.toByteArray())
                 return
-            
-        elif C == Identifiers.recv.Chat.C:
+             
+        elif C == Identifiers.recv.Chat.C: ################
             if CC == Identifiers.recv.Chat.Chat_Message:
                 message = packet.readUTF().replace("&amp;#", "&#").replace("<", "&lt;")
                 if self.client.isGuest:
                     self.client.sendLangueMessage("", "$Créer_Compte_Parler")
                     return
+                    
                 elif message == "!lb":
                     self.client.sendLeaderBoard()
+                    return
+                    
                 elif message == "!listrec":
                     self.client.sendPlayerRecords()
+                    return
+                    
                 elif message.startswith("!") and self.client.room.luaRuntime != None:
                     self.client.room.luaRuntime.emit("ChatCommand", (self.client.playerName, message[1:]))
                     if message[1:] in self.client.room.luaRuntime.HiddenCommands:
                         return
+                        
                 elif not message == "" and len(message) < 256:
                     if self.client.isMute:
                         muteInfo = self.server.getModMuteInfo(self.client.playerName)
@@ -352,27 +361,19 @@ class Packets:
                                 self.server.reports[self.client.playerName]['muteReason'] = ""
                                 self.server.reports[self.client.playerName]['mutedBy'] = ""
                             self.server.removeModMute(self.client.playerName)
+                        else:
+                            self.client.sendModMuteMessage(self.client.playerName, timeCalc, muteInfo[0], True)
+                    else:
+                        if message != self.client.lastMessage:
+                            self.client.lastMessage = message
                             if self.client.isMumute:
                                 self.client.room.sendAllChat(self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, 2)
                             else:
                                 self.client.room.sendAllChat(self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, self.server.checkMessage(message))
                         else:
-                            self.client.sendModMuteMessage(self.client.playerName, timeCalc, muteInfo[0], True)
-                            return
-                    else:
-                        if True:
-                        #if not self.client.chatdisabled:
-                            if not message == self.client.lastMessage:
-                                self.client.lastMessage = message
-                                if self.client.isMumute:
-                                    self.client.room.sendAllChat(self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, 2)
-                                else:
-                                    self.client.room.sendAllChat(self.client.playerName if self.client.mouseName == "" else self.client.mouseName, message, self.server.checkMessage(message))
-                                #self.client.chatdisabled = True
-                            else:
-                                self.client.sendLangueMessage("", "$Message_Identique")
-                        else:
-                            self.client.sendLangueMessage("", "$Doucement")
+                            self.client.sendLangueMessage("", "$Message_Identique")
+                        #else:
+                            #self.client.sendLangueMessage("", "$Doucement")
 
                     if not self.client.playerName in self.server.chatMessages:
                         messages = deque([], 60)
@@ -380,24 +381,18 @@ class Packets:
                         self.server.chatMessages[self.client.playerName] = messages
                     else:
                         self.server.chatMessages[self.client.playerName].append([_time.strftime("%Y/%m/%d %H:%M:%S"), message])
+                        
                 if self.client.room.luaRuntime != None:
                     self.client.room.luaRuntime.emit("ChatMessage", (self.client.playerName, message))
-                    
                 return
-                ##else:
-##                    self.client.sendMessage("<ROSE>You need 3 cheeses to speak.")
 
-           
             elif CC == Identifiers.recv.Chat.Staff_Chat:
                 type, message = packet.readByte(), packet.readUTF()
-                priv = self.client.privLevel
-
-                if priv < 2:
+                if self.client.privLevel < 2:
                     return
                 self.client.sendAllModerationChat(type, message)
                 return
                 
-
             elif CC == Identifiers.recv.Chat.Commands:
                 command = packet.readUTF()
                 if _time.time() - self.client.CMDTime > 1:
@@ -501,7 +496,7 @@ class Packets:
                 self.client.room.sendAll(Identifiers.send.Meep_IMG, ByteArray().writeInt(self.client.playerCode).toByteArray())
                 self.client.room.sendAll(Identifiers.send.Meep, ByteArray().writeInt(self.client.playerCode).writeShort(posX).writeShort(posY).writeInt(10 if self.client.isShaman else 5).toByteArray())
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventPlayerMeep", (self.client.playerName))
+                    self.client.room.luaRuntime.emit("PlayerMeep", (self.client.playerName))
                 return
 
             elif CC == Identifiers.recv.Player.Bolos: 
@@ -524,7 +519,7 @@ class Packets:
                 self.client.sendVampireMode(True)
                 return
                 
-            elif CC == Identifiers.recv.Player.Calendar:
+            elif CC == Identifiers.recv.Player.Calendar: ###################
                 playerName = packet.readUTF()
                 player = self.server.players.get(playerName)
                 if player != None:
@@ -563,13 +558,20 @@ class Packets:
                     self.client.sendPacket([8, 70], p.toByteArray())
                 return
 
-        elif C == Identifiers.recv.Buy_Fraises.C: 
+        elif C == Identifiers.recv.Buy_Fraises.C:  ################
             print(C, CC)
             if CC == Identifiers.recv.Buy_Fraises.PayPal:
                 isSteam = packet.readBoolean()
                 if not isSteam:
                     p = ByteArray()
-                    p.writeByte(1).writeInt(100).writeShort(69).writeInt(599).writeUTF("USD") #5.99 * 100 = 599 - price | 69 - amount
+                    p.writeBoolean(True).writeInt(100).writeShort(69).writeInt(599).writeUTF("USD") #5.99 * 100 = 599 - price | 69 - amount
+                    """
+                    Are there any available offers (Boolean)
+                    Unknown (Int)
+                    Fraises (Short)
+                    Money (Int), money = money / 100
+                    Currency (String)
+                    """
                     self.client.sendPacket([12, 12], p.toByteArray())
                 else:
                     p = ByteArray()
@@ -578,12 +580,19 @@ class Packets:
                     p.writeByte(3).writeInt(999).writeShort(1100).writeShort(1000).writeShort(100).writeUTF("EUR") # Third Item
                     p.writeByte(4).writeInt(1499).writeShort(1700).writeShort(1500).writeShort(200).writeUTF("EUR") # Fourth Item
                     p.writeByte(5).writeInt(1999).writeShort(2400).writeShort(2000).writeShort(400).writeUTF("EUR") # Fifth Item
+                    """
+                    ID (Byte)
+                    Money (Int)
+                    Fraises (Short)
+                    Free Fraises (Short, Short)
+                    """
                     self.client.sendPacket([100, 90], p.toByteArray())
                     
             elif CC == Identifiers.recv.Buy_Fraises.inGamePurchase:
                 self.client.sendPacket([12, 2], ByteArray().writeUTF("https://bai.com").writeUTF("https://bai.com").toByteArray())
             
             elif CC == Identifiers.recv.Buy_Fraises.inSteamPurchase:
+                
                 return
             
             elif CC == Identifiers.recv.Buy_Fraises.Cancel_Transaction:
@@ -749,7 +758,7 @@ class Packets:
 
             elif CC == Identifiers.recv.Modopwet.Change_Langue:
                 if self.client.privLevel >= 7:
-                    langue, modopwetOnlyPlayerReports, sortBy = packet.readUTF(),packet.readBoolean(),packet.readBoolean()
+                    langue, modopwetOnlyPlayerReports, sortBy = packet.readUTF(), packet.readBoolean(), packet.readBoolean()
                     self.client.modoPwetLangue = langue.upper()
                     self.client.modoPwet.openModoPwet(self.client.isModoPwet, modopwetOnlyPlayerReports, sortBy)
                 return
@@ -766,7 +775,7 @@ class Packets:
                     self.client.modoPwet.openChatLog(playerName)
                 return
 
-        elif C == Identifiers.recv.Login.C: 
+        elif C == Identifiers.recv.Login.C: ################
             if CC == Identifiers.recv.Login.Create_Account:
                 playerName, password, email, captcha, url, test = Utils.parsePlayerName(packet.readUTF()), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readUTF()
                 if True: #self.client.checkTimeAccount()
@@ -980,7 +989,7 @@ class Packets:
         elif C == Identifiers.recv.Lua.C:
             if CC == Identifiers.recv.Lua.Lua_Script:
                 script = packet.readUTFBytes(int.from_bytes(packet.read(3),'big')).decode()
-                if (self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp):
+                if(self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp) or self.server.isDebug:
                     if not self.client.isLuaAdmin:
                         if self.client.room.luaRuntime == None:
                             self.client.room.luaRuntime = Lua(self.client.room, self.server)
@@ -1006,36 +1015,36 @@ class Packets:
                             time = " " + time
                         self.server.sonar[self.client.playerName].append(f"<BL>{chars[key]}<G> + <V>{time}</V> ms")
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventKeyboard", (self.client.playerName, key, down, posX, posY))
+                    self.client.room.luaRuntime.emit("Keyboard", (self.client.playerName, key, down, posX, posY))
                 return
             
             elif CC == Identifiers.recv.Lua.Mouse_Click:
                 posX, posY = packet.readShort(), packet.readShort()                    
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventMouse", (self.client.playerName, posX, posY))
+                    self.client.room.luaRuntime.emit("Mouse", (self.client.playerName, posX, posY))
                 return
 
             elif CC == Identifiers.recv.Lua.Popup_Answer:
                 popupID, answer = packet.readInt(), packet.readUTF()
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventPopupAnswer", (popupID, self.client.playerName, answer))
+                    self.client.room.luaRuntime.emit("PopupAnswer", (popupID, self.client.playerName, answer))
                 return
 
             elif CC == Identifiers.recv.Lua.Text_Area_Callback:
                 textAreaID, event = packet.readInt(), packet.readUTF()
 
                 if event in ["lbileri","lbgeri","lbkapat"]:
-                    self.client.lbSayfaDegis(event=="lbileri",event=="lbkapat")
+                    self.client.lbSayfaDegis(event=="lbileri", event=="lbkapat")
                     return 
                     
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventTextAreaCallback", (textAreaID, self.client.playerName, event))
+                    self.client.room.luaRuntime.emit("TextAreaCallback", (textAreaID, self.client.playerName, event))
                 return
 
             elif CC == Identifiers.recv.Lua.Color_Picked: 
                 colorPickerId, player, color, title = packet.readInt(), packet.readUTF(), packet.readInt(), packet.readUTF()
                 if self.client.room.luaRuntime != None:
-                    self.client.room.luaRuntime.emit("eventColorPicked", (colorPickerId, color))
+                    self.client.room.luaRuntime.emit("ColorPicked", (colorPickerId, player, color))
                 return
             
         elif C == Identifiers.recv.Cafe.C or C == Identifiers.recv.Moludrome.C:
@@ -1188,14 +1197,14 @@ class Packets:
                         self.client.room.sendAllOthers(self.client, Identifiers.send.Invocation, ByteArray().writeInt(self.client.playerCode).writeShort(objectCode).writeShort(posX).writeShort(posY).writeShort(rotation).writeUTF(position).writeBoolean(invocation).toByteArray())
                     
                     if self.client.room.luaRuntime != None:
-                        self.client.room.luaRuntime.emit("eventSummoningStart", (self.client.playerName, objectCode, posX, posY, rotation))
+                        self.client.room.luaRuntime.emit("SummoningStart", (self.client.playerName, objectCode, posX, posY, rotation))
                 return
 
             elif CC == Identifiers.recv.Transformice.Remove_Invocation:
                 if self.client.isShaman:
                     self.client.room.sendAllOthers(self.client, Identifiers.send.Remove_Invocation, ByteArray().writeInt(self.client.playerCode).toByteArray())
                     if self.client.room.luaRuntime != None:
-                        self.client.room.luaRuntime.emit("eventSummoningCancel", (self.client.playerName))
+                        self.client.room.luaRuntime.emit("SummoningCancel", (self.client.playerName))
                 return
 
             elif CC == Identifiers.recv.Transformice.Change_Shaman_Badge:
@@ -1383,6 +1392,13 @@ class Packets:
             
             elif CC == Identifiers.recv.Others.NotAttach_Player:
                 self.client.room.sendAll(Identifiers.send.SetPositionToAttach, ByteArray().writeByte(-1).toByteArray())
+                return
+
+            elif CC == Identifiers.recv.Others.Open_Sales:
+                self.client.sendPacket([144, 29], ByteArray().writeUTF("").toByteArray())
+                return
+
+            elif CC == Identifiers.recv.Others.Add_Sale:
                 return
 
         if self.server.isDebug:

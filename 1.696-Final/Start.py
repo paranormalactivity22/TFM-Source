@@ -106,7 +106,7 @@ class Client:
         self.shamanCheeses = 0
         self.shamanExp = 0
         self.shamanExpNext = 32
-        self.shamanLevel = 1
+        self.shamanLevel = 0
         self.shamanSaves = 0
         self.shamanSavesNoSkill = 0
         self.shamanType = 0
@@ -175,6 +175,7 @@ class Client:
         self.tradeConfirm = False
         self.useTotem = False
         self.validatingVersion = False
+        self.canChangeMission = True
 
         # Others
         self.Cursor = Cursor
@@ -189,6 +190,7 @@ class Client:
         self.resSkillsTimer = None
         self.followed = None
         self.killafktimer = None
+        self.playerException = None
         
         # List
         self.records = []
@@ -224,7 +226,6 @@ class Client:
 
         # Dict
         self.playerConsumables = {}
-        self.playerMissions = {}
         self.playerSkills = {}
         self.shopBadges = {}
         self.tradeConsumables = {}
@@ -245,7 +246,7 @@ class Client:
             var_56 = var_176.readByte() & 255
             var_2068 = var_2068 | (var_56 & 127) << 7 * var_2053
             var_2053 += 1
-            if not ((var_56 & 128) == 128 and var_2053 < 5):
+            if not ((var_56 & 128) == 128 and var_2053 < 10): #5
                 return var_2068+1, var_2053
 
     def data_received(self, data):
@@ -276,7 +277,7 @@ class Client:
         self.Skills = Skills(self, self.server)
         self.Packets = Packets(self, self.server)
         self.Commands = Commands(self, self.server)
-        self.GameException = GameException(self)
+        self.playerException = GameException(self)
         self.ModoCommands = ModoCommands(self, self.server) # Modo
         self.missions = Missions(self, self.server)
         self.AntiCheat = AntiCheat(self, self.server)
@@ -394,19 +395,18 @@ class Client:
 # Functions
 
     def buyNPCItem(self, itemID):
-        itemID += 1
-        item = self.server.npcs["Shop"].get(self.lastNpc)[itemID]
+        item = self.server.npcs["Shop"][self.lastNpc][itemID]
         type, id, amount, four, priceItem, priceAmount = item
-                
-        if priceItem in self.playerConsumables and self.playerConsumables.get(priceItem) >= priceAmount:
-            count = self.playerConsumables.get(priceItem) - priceAmount
+        print(priceAmount)
+        if priceItem in self.playerConsumables and self.playerConsumables[priceItem] >= priceAmount:
+            count = self.playerConsumables[priceItem] - priceAmount
             if count <= 0:
                 del self.playerConsumables[priceItem]
             else:
                 self.playerConsumables[priceItem] = count
                 
             self.sendUpdateInventoryConsumable(priceItem, count)
-                
+            
             if type == 1:
                 self.sendAnimZelda(3, id)
                 self.Shop.sendUnlockedBadge(id)
@@ -421,7 +421,7 @@ class Client:
                 self.changeTitle(id)
                     
             elif type == 4:
-                self.sendNewConsumable(id, amount)
+                self.giveConsumable(id, amount)
             self.openNpcShop(self.lastNpc)
 
     def cancelTrade(self, playerName):
@@ -640,12 +640,19 @@ class Client:
     def getSimpleItemID(self, category, itemID):
         return itemID - 10000 - 1000 * category if (itemID >= 10000) else itemID - 100 * category
 
-    def giveConsumable(self, id, amount, limit=80, flag=0):
+    def giveConsumable(self, id, amount, flag=0):
+        limit = 80
+        if id in [800, 801, 2257, 2472]:
+            limit = 250
+            
+        elif id in [2253, 2254, 2260, 2261, 2504, 2505, 2506, 2507, 2508, 2509, 2497, 2343]:
+            limit = 200
+            
         if flag:
             self.sendAnimZelda(4, id)
         self.sendNewConsumable(id, amount)
         sum = (self.playerConsumables[id] if id in self.playerConsumables else 0) + amount
-        if limit != -1 and sum > limit: sum = limit
+        if sum > limit: sum = limit
         self.playerConsumables[id] = sum
         self.sendUpdateInventoryConsumable(id, sum)
 
@@ -768,7 +775,7 @@ class Client:
                             values = consumable.split(":")
                             self.playerConsumables[int(values[0])] = int(values[1])
                             
-                        self.equipedConsumables = rs[55] #rs[52]
+                        self.equipedConsumables = list(map(int, filter(None, rs[55].split(","))))
                         self.pet = rs[56]
                         self.petEnd = 0 if self.pet == 0 else Utils.getTime() + rs[57]
                         self.fur = rs[58]
@@ -930,6 +937,9 @@ class Client:
         if self.room.isTotemEditor:
             self.initTotemEditor()
 
+        if self.room.isVillage:
+            self.server.loop.call_later(0.2, self.sendNPCS)
+
         if self.room.isMulodrome:
             if not self.playerName in self.room.redTeam and not self.playerName in self.room.blueTeam:
                 if not self.isDead:
@@ -941,9 +951,6 @@ class Client:
 
         if self.room.currentMap in range(200, 211) and not self.isShaman:
             self.sendPacket(Identifiers.send.Can_Transformation, 1)
-
-        if self.room.isVillage:
-            self.server.loop.call_later(0.2, self.sendNpcs)
 
     def sendAccountTime(self):
         date = datetime.datetime.now() + timedelta(hours=1)
@@ -1196,11 +1203,11 @@ class Client:
     def sendNewConsumable(self, consumable, count):
         self.sendPacket(Identifiers.send.New_Consumable, ByteArray().writeByte(0).writeShort(consumable).writeShort(count).toByteArray())
 
-    def sendNpcs(self):
+    def sendNPCS(self):
         npcs = self.server.npcs["NPC"]
         for npc in npcs.items():
             value = npc[1]
-            self.spawnNPC(npc[0], value[0], value[1], value[2], value[3], value[4], value[5])
+            self.room.spawnNPC(value[0], {"id":npc[0], "title":value[1], "starePlayer":value[2], "look":str(value[3]), "x":value[4], "y":value[5]})
 
     def sendPacketTribulle(self, code, result):
         self.sendPacket([60, 3], ByteArray().writeShort(code).writeBytes(result).toByteArray())
@@ -1453,11 +1460,8 @@ class Client:
         if self.room.luaRuntime != None:
             self.room.luaRuntime.emit("PlayerVampire", (self.playerName))
 
-    def spawnNPC(self, npcId, npcName, npcTitle, starePlayer, npcLook, npcPosX, npcPosY):
-        self.sendPacket(Identifiers.send.NPC, ByteArray().writeInt(npcId).writeUTF(npcName).writeShort(npcTitle).writeBoolean(starePlayer).writeUTF(npcLook).writeShort(npcPosX).writeShort(npcPosY).writeShort(1).writeByte(11).writeShort(0).toByteArray())
-
     def openNpcShop(self, npcName):
-        npcShop = self.server.npcs["Shop"][npcName]
+        npcShop = self.server.npcs["Shop"].get(npcName)
         self.lastNpc = npcName
             
         data = ByteArray()
@@ -1466,7 +1470,7 @@ class Client:
         
         for item in npcShop:
             type, id, amount, four, priceItem, priceAmount = item
-            if (type == 1 and id in self.shopBadges) or (type == 2 and id in self.shamanBadges) or (type == 3 and self.hasTitle(id)) or (type == 4 and id in self.playerConsumables and self.playerConsumables.get(id) + amount > 10000):
+            if (type == 1 and id in self.shopBadges) or (type == 2 and id in self.shamanBadges) or (type == 3 and self.hasTitle(id)) or (type == 4 and id in self.playerConsumables and self.playerConsumables.get(id) + amount > 256):
                 data.writeByte(2)
             elif not priceItem in self.playerConsumables or self.playerConsumables.get(priceItem) < priceAmount:
                 data.writeByte(1)
@@ -1475,6 +1479,10 @@ class Client:
 
             data.writeByte(type).writeInt(id).writeShort(amount).writeByte(four).writeInt(priceItem).writeShort(priceAmount).writeInt(0)
         self.sendPacket(Identifiers.send.NPC_Shop, data.toByteArray())
+
+        if self.room.luaRuntime != None:
+            self.room.luaRuntime.emit("TalkToNPC", (self.playerName, npcName))
+
 
     def ResetAfkKillTimer(self):
         if self.killafktimer != None:
@@ -1535,7 +1543,7 @@ class Client:
 
     def tradeInvite(self, playerName):
         player = self.room.clients.get(playerName)
-        if player != None and (not self.ipAddress == player.ipAddress) and self.privLevel > 0 and player.privLevel > 0:
+        if player != None and ((not self.ipAddress == player.ipAddress) and self.privLevel > 0 and player.privLevel > 0) or self.server.isDebug:
             if not player.isTrade:
                 if not player.room.name == self.room.name:
                     self.sendTradeResult(playerName, 3)
@@ -1603,7 +1611,8 @@ class Client:
           
     def updateDatabase(self):
         if not self.isGuest:
-            Cursor.execute("update Users set PrivLevel = %s, TitleNumber = %s, FirstCount = %s, CheeseCount = %s, ShamanCheeses = %s, ShopCheeses = %s, ShopFraises = %s, ShamanSaves = %s, ShamanSavesNoSkill = %s, HardModeSaves = %s, HardModeSavesNoSkill = %s, DivineModeSaves = %s, DivineModeSavesNoSkill = %s, BootcampCount = %s, ShamanType = %s, ShopItems = %s, ShamanItems = %s, Clothes = %s, Look = %s, ShamanLook = %s, MouseColor = %s, ShamanColor = %s, Badges = %s, CheeseTitleList = %s, FirstTitleList = %s, ShamanTitleList = %s, ShopTitleList = %s, BootcampTitleList = %s, HardModeTitleList = %s, DivineModeTitleList = %s, SpecialTitleList = %s, BanHours = %s, ShamanLevel = %s, ShamanExp = %s, ShamanExpNext = %s, Skills = %s, LastOn = %s, FriendsList = %s, IgnoredsList = %s, Gender = %s, LastDivorceTimer = %s, Marriage = %s, TribeCode = %s, TribeRank = %s, TribeJoined = %s, Gifts = %s, Messages = %s, SurvivorStats = %s, RacingStats = %s, DefilanteStats = %s, Consumables = %s, EquipedConsumables = %s, Pet = %s, PetEnd = %s, Fur = %s, FurEnd = %s, ShamanBadges = %s, EquipedShamanBadge = %s, AventureCounts = %s, AventurePoints = %s,  AventureSaves = %s, Letters = %s, Time = %s, Karma = %s, Roles = %s where Username = %s", [self.privLevel, self.titleNumber, self.firstCount, self.cheeseCount, self.shamanCheeses, self.shopCheeses, self.shopFraises, self.shamanSaves, self.shamanSavesNoSkill, self.hardModeSaves, self.hardModeSavesNoSkill, self.divineModeSaves, self.divineModeSavesNoSkill, self.bootcampCount, self.shamanType, self.shopItems, self.shamanItems, "|".join(map(str, self.clothes)), self.playerLook, self.shamanLook, self.mouseColor, self.shamanColor, ",".join(map(str, self.shopBadges)), ",".join(map(str, self.cheeseTitleList)), ",".join(map(str, self.firstTitleList)), ",".join(map(str, self.shamanTitleList)), ",".join(map(str, self.shopTitleList)), ",".join(map(str, self.bootcampTitleList)), ",".join(map(str, self.hardModeTitleList)), ",".join(map(str, self.divineModeTitleList)), ",".join(map(str, self.specialTitleList)), self.banHours, self.shamanLevel, self.shamanExp, self.shamanExpNext, ";".join(map(lambda skill: "%s:%s" %(skill[0], skill[1]), self.playerSkills.items())), self.tribulle.getTime(), ",".join(map(str, filter(None, [self.server.getPlayerID(friend) for friend in self.friendsList]))), ",".join(map(str, filter(None, [self.server.getPlayerID(ignored) for ignored in self.ignoredsList]))), self.gender, self.lastDivorceTimer, self.server.getPlayerID(self.marriage), self.tribeCode, self.tribeRank, self.tribeJoined, self.gifts, self.messages, ",".join(map(str, self.survivorStats)), ",".join(map(str, self.racingStats)), ",".join(map(str, self.defilanteStats)), ";".join(map(lambda consumable: "%s:%s" %(consumable[0], consumable[1]), self.playerConsumables.items())), ",".join(map(str, self.equipedConsumables)), self.pet, abs(Utils.getSecondsDiff(self.petEnd)), self.fur, abs(Utils.getSecondsDiff(self.furEnd)), ",".join(map(str, self.shamanBadges)), self.equipedShamanBadge, ";".join(map(lambda aventure: "%s:%s" %(aventure[0], aventure[1]), self.aventureCounts.items())), ";".join(map(lambda points: "%s:%s" %(points[0], points[1]), self.aventurePoints.items())), self.aventureSaves, self.letters, self.playerTime + abs(Utils.getSecondsDiff(self.loginTime)), self.playerKarma, self.roles, self.playerName])
+            self.missions.updateMissions()
+            Cursor.execute("update Users set PrivLevel = %s, TitleNumber = %s, FirstCount = %s, CheeseCount = %s, ShamanCheeses = %s, ShopCheeses = %s, ShopFraises = %s, ShamanSaves = %s, ShamanSavesNoSkill = %s, HardModeSaves = %s, HardModeSavesNoSkill = %s, DivineModeSaves = %s, DivineModeSavesNoSkill = %s, BootcampCount = %s, ShamanType = %s, ShopItems = %s, ShamanItems = %s, Clothes = %s, Look = %s, ShamanLook = %s, MouseColor = %s, ShamanColor = %s, Badges = %s, CheeseTitleList = %s, FirstTitleList = %s, ShamanTitleList = %s, ShopTitleList = %s, BootcampTitleList = %s, HardModeTitleList = %s, DivineModeTitleList = %s, SpecialTitleList = %s, BanHours = %s, ShamanLevel = %s, ShamanExp = %s, ShamanExpNext = %s, Skills = %s, LastOn = %s, FriendsList = %s, IgnoredsList = %s, Gender = %s, LastDivorceTimer = %s, Marriage = %s, TribeCode = %s, TribeRank = %s, TribeJoined = %s, Gifts = %s, Messages = %s, SurvivorStats = %s, RacingStats = %s, DefilanteStats = %s, Consumables = %s, EquipedConsumables = %s, Pet = %s, PetEnd = %s, Fur = %s, FurEnd = %s, ShamanBadges = %s, EquipedShamanBadge = %s, AventureCounts = %s, AventurePoints = %s,  AventureSaves = %s, Letters = %s, Time = %s, Karma = %s, Roles = %s where Username = %s", [self.privLevel, self.titleNumber, self.firstCount, self.cheeseCount, self.shamanCheeses, self.shopCheeses, self.shopFraises, self.shamanSaves, self.shamanSavesNoSkill, self.hardModeSaves, self.hardModeSavesNoSkill, self.divineModeSaves, self.divineModeSavesNoSkill, self.bootcampCount, self.shamanType, self.shopItems, self.shamanItems, "|".join(map(str, self.clothes)), self.playerLook, self.shamanLook, self.mouseColor, self.shamanColor, ",".join(map(str, self.shopBadges)), ",".join(map(str, self.cheeseTitleList)), ",".join(map(str, self.firstTitleList)), ",".join(map(str, self.shamanTitleList)), ",".join(map(str, self.shopTitleList)), ",".join(map(str, self.bootcampTitleList)), ",".join(map(str, self.hardModeTitleList)), ",".join(map(str, self.divineModeTitleList)), ",".join(map(str, self.specialTitleList)), self.banHours, self.shamanLevel, self.shamanExp, self.shamanExpNext, ";".join(map(lambda skill: "%s:%s" %(skill[0], skill[1]), self.playerSkills.items())), self.tribulle.getTime(), ",".join(map(str, filter(None, [self.server.getPlayerID(friend) for friend in self.friendsList]))), ",".join(map(str, filter(None, [self.server.getPlayerID(ignored) for ignored in self.ignoredsList]))), self.gender, self.lastDivorceTimer, self.marriage, self.tribeCode, self.tribeRank, self.tribeJoined, self.gifts, self.messages, ",".join(map(str, self.survivorStats)), ",".join(map(str, self.racingStats)), ",".join(map(str, self.defilanteStats)), ";".join(map(lambda consumable: "%s:%s" %(consumable[0], consumable[1]), self.playerConsumables.items())), ",".join(map(str, self.equipedConsumables)), self.pet, abs(Utils.getSecondsDiff(self.petEnd)), self.fur, abs(Utils.getSecondsDiff(self.furEnd)), ",".join(map(str, self.shamanBadges)), self.equipedShamanBadge, ";".join(map(lambda aventure: "%s:%s" %(aventure[0], aventure[1]), self.aventureCounts.items())), ";".join(map(lambda points: "%s:%s" %(points[0], points[1]), self.aventurePoints.items())), self.aventureSaves, self.letters, self.playerTime + abs(Utils.getSecondsDiff(self.loginTime)), self.playerKarma, self.roles, self.playerName])
 
     def useConsumable(self, consumableID):
         if consumableID in self.playerConsumables and not self.isDead and not self.room.disablePhysicalConsumables:
@@ -1705,7 +1714,6 @@ class Client:
 
                     self.room.sendAll(Identifiers.send.Use_Inventory_Consumable, ByteArray().writeInt(self.playerCode).writeShort(consumableID).toByteArray())
                     self.sendUpdateInventoryConsumable(consumableID, count)
-
 
     def sendLeaderBoard(self): 
         if self.room.isFastRacing:
@@ -1831,7 +1839,7 @@ class Client:
                 self.currentPlace = place
                 if place == 1:
                     self.playerScore += (4 if self.room.isRacing else 4 if self.room.isFastRacing else 16) if not self.room.noAutoScore else 0
-                    if self.room.getPlayerCountUnique() >= self.server.needToFirst and self.room.countStats and not self.isShaman and not self.canShamanRespawn:
+                    if (self.room.getPlayerCountUnique() >= self.server.needToFirst and self.room.countStats and not self.isShaman and not self.canShamanRespawn) or self.server.isDebug:
                         self.firstCount += 1
                         self.cheeseCount += 1
 
@@ -1909,7 +1917,7 @@ class Client:
                     elif self.room.isDefilante:
                         if not self.room.noAutoScore: self.playerScore += self.defilantePoints
                         
-                if self.room.getPlayerCountUnique() >= self.server.needToFirst and self.room.countStats and not self.room.isBootcamp and not self.room.isRacing:
+                if (self.room.getPlayerCountUnique() >= self.server.needToFirst and self.room.countStats and not self.room.isBootcamp and not self.room.isRacing) or self.server.isDebug:
                     if self.playerCode == self.room.currentShamanCode or self.playerCode == self.room.currentSecondShamanCode:
                         self.shamanCheeses += 1
                     else:
@@ -2547,7 +2555,7 @@ class Server(asyncio.Transport):
             player.Skills = _module.Skills(player, self)
             player.Packets = _module.Packets(player, self)
             player.Commands = _module.Commands(player, self)
-            player.GameException = _module.GameException(player)
+            player.playerException = _module.GameException(player)
             player.ModoCommands = _module.ModoCommands(player, self) # Modo
             player.missions = _module.Missions(player, self)
 
@@ -2701,7 +2709,6 @@ class Room:
         self.isSnowing = False
         self.isVillage = False
         self.isVanilla = False
-        self.is801Room = False
         self.countStats = False
         self.isFixedMap = False
         self.isNormRoom = False
@@ -2814,10 +2821,7 @@ class Room:
             self.roundTime = 0
 
         elif roomNameCheck.startswith("801") or roomNameCheck.startswith("village"):
-            if roomNameCheck.startswith("village"):
-                self.isVillage = True
-            else:
-                self.is801Room = True
+            self.isVillage = True
             self.roundTime = 0
             self.never20secTimer = True
             self.autoRespawn = True
@@ -3020,7 +3024,7 @@ class Room:
 
             if self.currentMap in self.catchCheeseMaps:
                 self.catchTheCheeseMap = True
-                
+
             self.gameStartTime = Utils.getTime()
             self.gameStartTimeMillis = time.time()
 
@@ -3257,7 +3261,7 @@ class Room:
                         self.mapPerma = 22
                         self.mapInverted = False
 
-            elif self.isVillage or self.is801Room:
+            elif self.isVillage:
                 return 801
 
             elif self.isVanilla:
@@ -3678,39 +3682,10 @@ class Room:
 
 # Lua
 
-    def bindKeyBoard(self, playerName, key, down, yes = True):
-        if playerName == "":
-            self.sendAll(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(key).writeBoolean(down).writeBoolean(yes).toByteArray())
-            return
-        player = self.clients.get(playerName)
-        if player != None:
-            player.sendPacket(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(key).writeBoolean(down).writeBoolean(yes).toByteArray())
-
     def addPhysicObject(self, id, x, y, bodyDef):
         self.sendAll(Identifiers.send.Add_Physic_Object, ByteArray().writeShort(id).writeBoolean(bool(bodyDef["dynamic"]) if "dynamic" in bodyDef else False).writeByte(int(bodyDef["type"]) if "type" in bodyDef else 0).writeShort(x).writeShort(y).writeShort(int(bodyDef["width"]) if "width" in bodyDef else 0).writeShort(int(bodyDef["height"]) if "height" in bodyDef else 0).writeBoolean(bool(bodyDef["foreground"]) if "foreground" in bodyDef else False).writeShort(int(bodyDef["friction"]) if "friction" in bodyDef else 0).writeShort(int(bodyDef["restitution"]) if "restitution" in bodyDef else 0).writeShort(int(bodyDef["angle"]) if "angle" in bodyDef else 0).writeBoolean("color" in bodyDef).writeInt(int(bodyDef["color"]) if "color" in bodyDef else 0).writeBoolean(bool(bodyDef["miceCollision"]) if "miceCollision" in bodyDef else True).writeBoolean(bool(bodyDef["groundCollision"]) if "groundCollision" in bodyDef else True).writeBoolean(bool(bodyDef["fixedRotation"]) if "fixedRotation" in bodyDef else False).writeShort(int(bodyDef["mass"]) if "mass" in bodyDef else 0).writeShort(int(bodyDef["linearDamping"]) if "linearDamping" in bodyDef else 0).writeShort(int(bodyDef["angularDamping"]) if "angularDamping" in bodyDef else 0).writeBoolean(False).writeUTF("").writeBoolean(False).toByteArray())
 
-    def removeObject(self, objectId):
-        if objectId == None: objectId = 0
-        self.sendAll(Identifiers.send.Remove_Object, ByteArray().writeInt(objectId).writeBoolean(True).toByteArray())
-        if self.luaRuntime != None:
-            del self.luaRuntime.RoomObjects[int(objectId)]
-            self.luaRuntime.RefreshTFMGet()
-
-    def movePlayer(self, playerName, xPosition, yPosition, pOffSet=False, xSpeed=0, ySpeed=0, sOffSet=False):
-        player = self.clients.get(playerName)
-        if player != None:
-            player.sendPacket(Identifiers.send.Move_Player, ByteArray().writeShort(xPosition).writeShort(yPosition).writeBoolean(pOffSet).writeShort(xSpeed).writeShort(ySpeed).writeBoolean(sOffSet).toByteArray())
-
-    def setNameColor(self, playerName, color):
-        if playerName in self.clients:
-            self.sendAll(Identifiers.send.Set_Name_Color, ByteArray().writeInt(self.clients.get(playerName).playerCode).writeInt(color).toByteArray())
-
-    def bindMouse(self, playerName, yes = True):
-        player = self.clients.get(playerName)
-        if player != None:
-            player.sendPacket(Identifiers.send.Bind_Mouse, ByteArray().writeBoolean(yes).toByteArray())
-
-    def addPopup(self, id, type, text, targetPlayer, x, y, width, fixedPos):
+    def addPopup(self, id, type, text, targetPlayer, x=50, y=50, width=0, fixedPos=False):
         p = ByteArray().writeInt(id).writeByte(type).writeUTF(text).writeShort(x).writeShort(y).writeShort(width).writeBoolean(fixedPos)
         if targetPlayer == "":
             self.sendAll(Identifiers.send.Add_Popup, p.toByteArray())
@@ -3718,7 +3693,7 @@ class Room:
             player = self.clients.get(targetPlayer)
             if player != None:
                 player.sendPacket(Identifiers.send.Add_Popup, p.toByteArray())
-    
+
     def addQuestanoablePopup(self, question="", popupID=0, targetPlayer="", _class="", small=True, big=False):
         if small:
             p = ByteArray().writeByte(1).writeUTF(_class).writeInt(popupID).writeBoolean(big).writeBoolean(big).writeUTF(question).toByteArray()
@@ -3731,7 +3706,7 @@ class Room:
             if player != None:
                 player.sendPacket(Identifiers.send.Questionable_Popup, p)
 
-    def addTextArea(self, id, text, targetPlayer, x, y, width, height, backgroundColor, borderColor, backgroundAlpha, fixedPos):
+    def addTextArea(self, id, text, targetPlayer="", x=50, y=50, width=0, height=0, backgroundColor=0x324650, borderColor=0, backgroundAlpha=1, fixedPos=False):
         p = ByteArray().writeInt(id).writeUTF(text).writeShort(x).writeShort(y).writeShort(width).writeShort(height).writeInt(backgroundColor).writeInt(borderColor).writeByte(100 if backgroundAlpha > 100 else backgroundAlpha).writeBoolean(fixedPos)
         if targetPlayer == "":
             self.sendAll(Identifiers.send.Add_Text_Area, p.toByteArray())
@@ -3740,7 +3715,32 @@ class Room:
             if client != None:
                 client.sendPacket(Identifiers.send.Add_Text_Area, p.toByteArray())
 
-    def removeTextArea(self, id, targetPlayer):
+    def bindKeyBoard(self, playerName, key, down, yes = True):
+        if playerName == "":
+            self.sendAll(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(key).writeBoolean(down).writeBoolean(yes).toByteArray())
+            return
+        player = self.clients.get(playerName)
+        if player != None:
+            player.sendPacket(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(key).writeBoolean(down).writeBoolean(yes).toByteArray())
+
+    def bindMouse(self, playerName, yes = True):
+        player = self.clients.get(playerName)
+        if player != None:
+            player.sendPacket(Identifiers.send.Bind_Mouse, ByteArray().writeBoolean(yes).toByteArray())
+
+    def movePlayer(self, playerName, xPosition, yPosition, pOffSet=False, xSpeed=0, ySpeed=0, sOffSet=False, angle=0, angleOffset=False):
+        player = self.clients.get(playerName)
+        if player != None:
+            player.sendPacket(Identifiers.send.Move_Player, ByteArray().writeShort(xPosition).writeShort(yPosition).writeBoolean(pOffSet).writeShort(xSpeed).writeShort(ySpeed).writeBoolean(sOffSet).writeShort(angle).writeBoolean(angleOffset).toByteArray())
+
+    def removeObject(self, objectId):
+        if objectId == None: objectId = 0
+        self.sendAll(Identifiers.send.Remove_Object, ByteArray().writeInt(objectId).writeBoolean(True).toByteArray())
+        if self.luaRuntime != None:
+            del self.luaRuntime.RoomObjects[int(objectId)]
+            self.luaRuntime.RefreshTFMGet()
+
+    def removeTextArea(self, id, targetPlayer=""):
         p = ByteArray().writeInt(id)
         if targetPlayer == "":
             self.sendAll(Identifiers.send.Remove_Text_Area, p.toByteArray())
@@ -3749,6 +3749,24 @@ class Room:
             if client != None:
                 client.sendPacket(Identifiers.send.Remove_Text_Area, p.toByteArray())
 
+    def setNameColor(self, playerName, color):
+        if playerName in self.clients:
+            self.sendAll(Identifiers.send.Set_Name_Color, ByteArray().writeInt(self.clients.get(playerName).playerCode).writeInt(color).toByteArray())
+    
+    def showColorPicker(self, id, targetPlayer, defaultColor, title):
+        packet = ByteArray().writeInt(id).writeInt(defaultColor).writeUTF(title)
+        if targetPlayer == "":
+            self.sendAll(Identifiers.send.Show_Color_Picker, packet.toByteArray())
+        else:
+            player = self.clients.get(targetPlayer)
+            if player != None:
+                player.sendPacket(Identifiers.send.Show_Color_Picker, packet.toByteArray())
+
+    def spawnNPC(self, npcName, data={}): ####################
+        self.sendAll(Identifiers.send.NPC, ByteArray().writeInt(int(data["id"]) if "id" in data else 0).writeUTF(npcName).writeShort(int(data["title"]) if "title" in data else 0).writeBoolean(bool(data["starePlayer"]) if "starePlayer" in data else False).writeUTF(data["look"] if "look" in data else "").writeShort(int(data["x"]) if "x" in data else 0).writeShort(int(data["y"]) if "y" in data else 0).writeShort(1).writeByte(11).writeShort(0).toByteArray())
+        
+        
+        
     def updateTextArea(self, id, text, targetPlayer):
         p = ByteArray().writeInt(id).writeUTF(text)
         if targetPlayer == "":
@@ -3758,15 +3776,7 @@ class Room:
             if client != None:
                 client.sendPacket(Identifiers.send.Update_Text_Area, p.toByteArray())
 
-    def showColorPicker(self, id, targetPlayer, defaultColor, title):
-        packet = ByteArray().writeInt(id).writeInt(defaultColor).writeUTF(title)
-        if targetPlayer == "":
-            self.sendAll(Identifiers.send.Show_Color_Picker, packet.toByteArray())
-        else:
-            player = self.clients.get(targetPlayer)
-            if player != None:
-                player.sendPacket(Identifiers.send.Show_Color_Picker, packet.toByteArray())
-                
+        
 async def setup():
     db = await aiosqlite.connect('./database/Maps.db')
 

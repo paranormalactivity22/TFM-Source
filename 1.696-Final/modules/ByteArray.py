@@ -3,8 +3,7 @@ from struct import *
 
 class ByteArray:
     def __init__(self, bytes=b""):
-        if isinstance(bytes, str):
-            bytes = bytes.encode()
+        if isinstance(bytes, str): bytes = bytes.encode()
         self.bytes = bytes
 
     def writeByte(self, value):
@@ -54,10 +53,8 @@ class ByteArray:
         return ByteArray(self.bytes)
 
     def writeUTF(self, value):
-        if isinstance(value, int):
-            value = str(value)
-        if isinstance(value, str):
-            value = value.encode()
+        if isinstance(value, int): value = str(value)
+        if isinstance(value, str): value = value.encode()
         self.writeShort(len(value))
         self.write(value)
         return self

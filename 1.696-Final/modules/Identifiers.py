@@ -357,7 +357,10 @@ class Identifiers:
             Send_Warnings = 5
             Attach_Player = 10
             NotAttach_Player = 11
+            Open_Outfits = 12
+            Open_Sales = 16
             
+            Add_Sale = 18
             Cafe = 6
             View_Posts = 15
     
@@ -369,7 +372,6 @@ class Identifiers:
         Remove_Object = [4, 8]
         Crouch = [4, 9]
         Shaman_Position = [4, 10]
-        Email_Confirmed = [28, 13]
 		
         Rounds_Count = [5, 1]
         New_Map = [5, 2]
@@ -577,6 +579,9 @@ class Identifiers:
         Player_Get_Cheese = [144, 6]
         SetPositionToAttach = [144, 9]
         AttachPlayer = [144, 20]
+        
+        setAIEMode = [144, 30]
+        NightMode = [144, 33]
         
         Set_Language = [176, 5]
         Language_List = [176, 6]

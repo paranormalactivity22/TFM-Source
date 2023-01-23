@@ -227,7 +227,7 @@ class Shop:
     def sendUnlockedBadge(self, badge):
         self.client.room.sendAll(Identifiers.send.Unlocked_Badge, ByteArray().writeInt(self.client.playerCode).writeShort(badge).toByteArray())
 
-    def sendShopGift(self, type, playerName):
+    def sendShopGiftPacket(self, type, playerName):
         self.client.sendPacket(Identifiers.send.Gift_result, ByteArray().writeByte(type).writeByte(0).writeUTF(playerName).writeByte(0).writeShort(0).toByteArray())
 
     def equipClothe(self, packet):
@@ -481,18 +481,18 @@ class Shop:
             player = self.server.players.get(playerName)
             if player != None:
                 if (player.Shop.checkInShamanShop(fullItem) if isShamanItem else player.Shop.checkInShop(fullItem)):
-                    self.sendShopGift(2, playerName)
+                    self.sendShopGiftPacket(2, playerName)
                 else:
                     self.server.lastShopGiftID += 1
                     player.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(self.client.playerName).writeUTF(self.client.playerLook).writeBoolean(isShamanItem).writeShort(fullItem).writeUTF(message).writeBoolean(False).toByteArray())
-                    self.sendShopGift(0, playerName)
+                    self.sendShopGiftPacket(0, playerName)
                     self.server.shopGifts[self.server.lastShopGiftID] = [self.client.playerName, isShamanItem, fullItem]
                     self.client.shopFraises -= self.getShamanShopItemPrice(fullItem) if isShamanItem else self.getShopItemPrice(fullItem)
                     self.sendShopList()
             else:
                 selfs = ""
                 if (self.checkInPlayerShop("ShamanItems" if isShamanItem else "ShopItems", playerName, fullItem)):
-                    self.sendShopGift(2, playerName)
+                    self.sendShopGiftPacket(2, playerName)
                 else:
                     self.Cursor.execute("select selfs from Users where Username = ?", [playerName])
                     rs = self.Cursor.fetchone()
@@ -500,7 +500,7 @@ class Shop:
 
                 selfs += ("" if selfs == "" else "/") + binascii.hexlify("|".join(map(str, [self.client.playerName, self.client.playerLook, isShamanItem, fullItem, message])))
                 self.Cursor.execute("update Users set selfs = ? where Username = ?", [selfs, playerName])
-                self.sendShopGift(0, playerName)
+                self.sendShopGiftPacket(0, playerName)
 
     def giftResult(self, packet):
         giftID, isOpen, message, isMessage = packet.readInt(), packet.readBoolean(), packet.readUTF(), packet.readBoolean()
