@@ -1,5 +1,5 @@
 #coding: utf-8
-import re, json, random, urllib.request, time as _time, struct, asyncio
+import re, json, random, urllib.request, time as _time, struct, asyncio, binascii, base64, zlib
 
 loop = asyncio.get_event_loop()
 
@@ -9,14 +9,15 @@ from ByteArray import ByteArray
 from Identifiers import Identifiers
 from Lua import Lua
 from collections import deque
+from datetime import datetime
 
 class Packets:
     def __init__(self, player, server):
         self.client = player
         self.server = player.server
+        self.data = {}
         self.Cursor = player.Cursor
         self.isOpenedHelpCommand = False
-        self.temps = {}
 
     async def parsePacket(self, packetID, C, CC, packet):
         if C == Identifiers.recv.Old_Protocol.C:
@@ -41,9 +42,15 @@ class Packets:
                     self.client.room.sendAllOthers(self.client, Identifiers.send.Sync, p.toByteArray())
                 return
 
-            elif CC == Identifiers.recv.Sync.Mouse_Movement:
+            elif CC == Identifiers.recv.Sync.Mouse_Movement: ################
                 packet2 = ByteArray().writeInt(self.client.playerCode).toByteArray() + packet.toByteArray()
-                a, e = packet.readInt(), packet.readShort()
+                a, e, e2 = packet.readInt(), packet.readBoolean(), packet.readBoolean()
+                if (e,e2) != (False,False):
+                    self.client.isFacingRight = self.client.isMovingRight = e
+                    self.client.isMovingLeft = e2
+                else:
+                    self.client.isMovingRight = e
+                    self.client.isMovingLeft = e2
                 #a, droiteEnCours, packet.readInt(), packet.readBoolean()
                 #self.client.isMovingRight = droiteEnCours
                 #self.client.isMovingLeft = gaucheEnCours
@@ -60,9 +67,53 @@ class Packets:
                 self.client.velX, self.client.velY, self.client.isJumping = packet.readShort(), packet.readShort(), packet.readBoolean()
                 self.client.room.sendAllOthers(self.client, Identifiers.send.Player_Movement, packet2)
                 return
+                """roundCode = packet.readInt()
+                droiteEnCours = packet.readBoolean()
+                gaucheEnCours = packet.readBoolean()
+                px = packet.readShort()
+                py = packet.readShort()
+                vx = packet.readShort()
+                vy = packet.readShort()
+                jump = packet.readBoolean()
+                jump_img = packet.readByte()
+                portal = packet.readByte()
+                isAngle = packet.getLength() > 0
+                angle = packet.readShort() if isAngle else -1
+                vel_angle = packet.readShort() if isAngle else -1
+                print(roundCode, droiteEnCours, gaucheEnCours, px, py, vx, vy, jump, jump_img, portal)
+                if roundCode == self.client.room.lastRoundCode:
+                    p = ByteArray()
+                    if droiteEnCours or gaucheEnCours:
+                        self.client.isMovingRight = droiteEnCours
+                        self.client.isMovingLeft = gaucheEnCours
+                        if self.client.isAfk == True:
+                            self.client.isAfk = False
+                    
+                    #if not self.client.posY == 0 and not self.client.posX == 0:
+                    #    lasty, lastx = self.client.posY, self.client.posX
+                    #else:
+                    #    lasty, lastx = 0, 0
+                    self.client.posX = px * 800 // 2700
+                    self.client.posY = py * 800 // 2700
+                    #if not lasty == 0 and not lastx == 0:
+                    #    if not lasty == self.client.posY or not lastx == self.client.posX:
+                    #        self.client.ResetAfkKillTimer()
+                    #        if self.client.isAfk:
+                    #            self.client.isAfk = False
+                                
+                    self.client.velX = vx
+                    self.client.velY = vy
+                    self.client.isJumping = jump
+                    
+                    p2 = ByteArray().writeInt(self.client.playerCode).writeInt(roundCode).writeBoolean(droiteEnCours).writeBoolean(gaucheEnCours).writeShort(px).writeShort(py).writeShort(vx).writeShort(vy).writeBoolean(jump).writeByte(jump_img).writeByte(portal)
+                    if isAngle > 0:
+                        p2.writeShort(angle).writeShort(vel_angle)
+
+                    self.client.room.sendAllOthers(self.client, Identifiers.send.Player_Movement, p2.toByteArray())
+
+                return"""
             
             elif CC == Identifiers.recv.Sync.Mort:
-                self.temps = {}
                 roundCode, loc_1 = packet.readInt(), packet.readByte()
                 if roundCode == self.client.room.lastRoundCode:
                     self.client.isDead = True
@@ -151,7 +202,6 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Room.Enter_Hole:
-                self.temps = {}
                 holeType, roundCode, monde, distance, holeX, holeY = packet.readByte(), packet.readInt(), packet.readInt(), packet.readShort(), packet.readShort(), packet.readShort()
                 if roundCode == self.client.room.lastRoundCode and (self.client.room.currentMap == -1 or monde == self.client.room.currentMap or self.client.room.EMapCode != 0):
                     self.client.playerWin(holeType, distance)
@@ -249,7 +299,6 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Room.Enter_Room:
-                self.temps = {}
                 community, roomName = packet.readUTF(), packet.readUTF()
                 if self.client.playerName in ["", " "]:
                     self.client.transport.close()
@@ -329,8 +378,8 @@ class Packets:
                 self.client.sendPacket(Identifiers.send.Music_PlayList, packet.toByteArray())
                 return
              
-        elif C == Identifiers.recv.Chat.C: ################
-            if CC == Identifiers.recv.Chat.Chat_Message:
+        elif C == Identifiers.recv.Chat.C:
+            if CC == Identifiers.recv.Chat.Chat_Message: ##########
                 message = packet.readUTF().replace("&amp;#", "&#").replace("<", "&lt;")
                 if self.client.isGuest:
                     self.client.sendLangueMessage("", "$Créer_Compte_Parler")
@@ -465,7 +514,7 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Player.Shop_List:
-                self.client.Shop.sendShopList()
+                self.client.Shop.sendShopList(True)
                 return
 
             elif CC == Identifiers.recv.Player.Buy_Skill:
@@ -499,7 +548,7 @@ class Packets:
                     self.client.room.luaRuntime.emit("PlayerMeep", (self.client.playerName))
                 return
 
-            elif CC == Identifiers.recv.Player.Bolos: 
+            elif CC == Identifiers.recv.Player.Bolos:  ##########
                 sla, sla2, id, type = packet.readByte(), packet.readByte(), packet.readByte(), packet.readByte()
                 imageID = (9 if id == 1 else 39 if id == 2 else 40 if id == 3 else 41 if id == 4 else 42 if id == 5 else 43)
                 p = ByteArray()
@@ -562,11 +611,12 @@ class Packets:
             print(C, CC)
             if CC == Identifiers.recv.Buy_Fraises.PayPal:
                 isSteam = packet.readBoolean()
+                print(packet.readBoolean())
                 if not isSteam:
                     p = ByteArray()
-                    p.writeBoolean(True).writeInt(100).writeShort(69).writeInt(599).writeUTF("USD") #5.99 * 100 = 599 - price | 69 - amount
+                    p.writeBoolean(True) # are there any available offers.
+                    p.writeInt(100).writeShort(69).writeInt(599).writeUTF("USD") #5.99 * 100 = 599 - price | 69 - amount
                     """
-                    Are there any available offers (Boolean)
                     Unknown (Int)
                     Fraises (Short)
                     Money (Int), money = money / 100
@@ -585,20 +635,25 @@ class Packets:
                     Money (Int)
                     Fraises (Short)
                     Free Fraises (Short, Short)
+                    
+                    self.client.sendPacket([12, 3], ByteArray().writeByte(0).writeByte(0).toByteArray()) - transaction error
                     """
                     self.client.sendPacket([100, 90], p.toByteArray())
+                return
                     
             elif CC == Identifiers.recv.Buy_Fraises.inGamePurchase:
-                self.client.sendPacket([12, 2], ByteArray().writeUTF("https://bai.com").writeUTF("https://bai.com").toByteArray())
-            
-            elif CC == Identifiers.recv.Buy_Fraises.inSteamPurchase:
-                
+                r1 = packet.readByte()
+                r2 = packet.readByte()
+                r3 = packet.readByte()
+                r4 = packet.readByte()
+                self.client.sendPacket([12, 2], ByteArray().writeUTF("https://bai.com").writeByte(r1).writeByte(r2).writeByte(r3).writeByte(r4).toByteArray())
                 return
+            
+            #elif CC == Identifiers.recv.Buy_Fraises.inSteamPurchase:
             
             elif CC == Identifiers.recv.Buy_Fraises.Cancel_Transaction:
+                web = packet.readUTF()
                 return
-                            
-            return
 
         elif C == Identifiers.recv.Tribe.C:
             if CC == Identifiers.recv.Tribe.Tribe_House:
@@ -619,11 +674,11 @@ class Packets:
 
         elif C == Identifiers.recv.Shop.C:
             if CC == Identifiers.recv.Shop.Equip_Clothe:
-                self.client.Shop.equipClothe(packet)
+                self.client.Shop.equipClothe(packet.readByte())
                 return
 
             elif CC == Identifiers.recv.Shop.Save_Clothe:
-                self.client.Shop.saveClothe(packet)
+                self.client.Shop.saveClothe(packet.readByte())
                 return
             
             elif CC == Identifiers.recv.Shop.Info:
@@ -631,87 +686,63 @@ class Packets:
                 return
 
             elif CC == Identifiers.recv.Shop.Equip_Item:
-                self.client.Shop.equipItem(packet)
+                self.client.Shop.equipItem(packet.readInt())
                 return
 
             elif CC == Identifiers.recv.Shop.Buy_Item:
-                self.client.Shop.buyItem(packet)
+                self.client.Shop.buyItem(packet.readInt(), packet.readBoolean())
                 return
 
             elif CC == Identifiers.recv.Shop.Buy_Custom:
-                self.client.Shop.customItemBuy(packet)
+                self.client.Shop.customItemBuy(packet.readInt(), packet.readBoolean())
                 return
 
             elif CC == Identifiers.recv.Shop.Custom_Item:
-                self.client.Shop.customItem(packet)
+                fullItem, length = packet.readInt(), packet.readByte()
+                customs = []
+                i = 0
+                while i < length:
+                    customs.append(packet.readInt())
+                    i += 1
+                self.client.Shop.customItem(fullItem, customs)
                 return
 
             elif CC == Identifiers.recv.Shop.Buy_Clothe:
-                self.client.Shop.buyClothe(packet)
-                return
+                return self.client.Shop.buyClothe(packet.readByte(), packet.readBoolean())
 
-            elif CC == Identifiers.recv.Shop.Buy_Visu_Done:
-                p = ByteArray(packet.toByteArray())
-                visuID = p.readShort()
-                lookBuy = p.readUTF()
-                look = self.server.shopOutfitsCheck[visuID].split(";")
-                look[0] = int(look[0])
-                count = 0
-                if self.client.shopFraises >= self.client.priceDoneVisu:
-                    for visual in look[1].split(","):
-                        if not visual == "0":
-                            item, customID = visual.split("_", 1) if "_" in visual else [visual, ""]
-                            item = int(item)
-                            itemID = self.client.getFullItemID(count, item)
-                            itemInfo = self.client.getItemInfo(count, item)
-                            if len(self.client.shopItems) == 1:
-                                if not self.client.Shop.checkInShop(itemID):
-                                    self.client.shopItems += str(itemID)+"_" if self.client.shopItems == "" else "," + str(itemID)+"_"
-                                    if not itemID in self.client.custom:
-                                        self.client.custom.append(itemID)
-                                    else:
-                                        if not str(itemID) in self.client.custom:
-                                            self.client.custom.append(str(itemID))
-                            else:
-                                if not self.client.Shop.checkInShop(str(itemID)):
-                                    self.client.shopItems += str(itemID)+"_" if self.client.shopItems == "" else "," + str(itemID)+"_"
-                                    if not itemID in self.client.custom:
-                                        self.client.custom.append(itemID)
-                                    else:
-                                        if not str(itemID) in self.client.custom:
-                                            self.client.custom.append(str(itemID))
-                        count += 1
-                        
-                    self.client.clothes.append("%02d/%s/%s/%s" %(len(self.client.clothes), lookBuy, "78583a", "fade55" if self.client.shamanSaves >= 1000 else "95d9d6"))
-                    furID = self.client.getFullItemID(22, look[0])
-                    self.client.shopItems += str(furID) if self.client.shopItems == "" else "," + str(furID)
-                    self.client.shopFraises -= self.client.priceDoneVisu
-                self.client.Shop.sendShopList(False)
+            elif CC == Identifiers.recv.Shop.Buy_Full_Look_Confirm:
+                return self.client.Shop.buyFullLookConfirm(packet.readShort(), packet.readUTF())
 
             elif CC == Identifiers.recv.Shop.Buy_Shaman_Item:
-                self.client.Shop.buyShamanItem(packet)
+                self.client.Shop.buyShamanItem(packet.readShort(), packet.readBoolean())
                 return
 
             elif CC == Identifiers.recv.Shop.Equip_Shaman_Item:
-                self.client.Shop.equipShamanItem(packet)
+                self.client.Shop.equipShamanItem(packet.readInt())
                 return
 
             elif CC == Identifiers.recv.Shop.Buy_Shaman_Custom:
-                self.client.Shop.customShamanItemBuy(packet)
+                self.client.Shop.customShamanItemBuy(packet.readInt(), packet.readBoolean())
                 return
 
             elif CC == Identifiers.recv.Shop.Custom_Shaman_Item:
-                self.client.Shop.customShamanItem(packet)
+                fullItem, length = packet.readInt(), packet.readByte()
+                customs = []
+                i = 0
+                while i < length:
+                    customs.append(packet.readInt())
+                    i += 1
+                self.client.Shop.customShamanItem(fullItem, customs)
                 return
 
             elif CC == Identifiers.recv.Shop.Send_gift:
-                self.client.Shop.sendShopGift(packet)
+                self.client.Shop.sendShopGift(packet.readUTF(), packet.readBoolean(), packet.readInt(), packet.readUTF())
                 return
 
             elif CC == Identifiers.recv.Shop.Gift_result:
-                self.client.Shop.giftResult(packet)
+                self.client.Shop.giftResult(packet.readInt(), packet.readBoolean(), packet.readUTF(), packet.readBoolean())
                 return
-
+                
         elif C == Identifiers.recv.Modopwet.C:
             if CC == Identifiers.recv.Modopwet.Modopwet:
                 if self.client.privLevel >= 7:
@@ -775,30 +806,28 @@ class Packets:
                     self.client.modoPwet.openChatLog(playerName)
                 return
 
-        elif C == Identifiers.recv.Login.C: ################
-            if CC == Identifiers.recv.Login.Create_Account:
+        elif C == Identifiers.recv.Login.C:
+            if CC == Identifiers.recv.Login.Create_Account: ################
                 playerName, password, email, captcha, url, test = Utils.parsePlayerName(packet.readUTF()), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readUTF()
-                if True: #self.client.checkTimeAccount()
-                    createTime = _time.time() - self.client.CRTTime
-                    if createTime < 5.2:
-                        #self.server.sendStaffMessage(7, "[<V>#</V>] The ip <J>"+self.client.ipAddress+"</J> is creating so fast accounts <FC><a event='banip:"+str(self.client.ipAddress)+"'>Suspect</a></FC>'")
-                        self.client.transport.close()
-                        return
-                    
-                    canLogin = False
-                    for urlCheck in self.server.serverURL:
-                        if url.startswith(urlCheck):
-                            canLogin = True
+                if self.client.checkTimeAccount():
+                
+                    # Login Keys
+                    if len(self.server.loginKeys) > 0:
+                        tempauth = self.server.authKey
+                        for value in self.server.loginKeys:
+                            if value != "":
+                                tempauth ^= value
+                                
+                    #self.client.canLogin[2] = True if tempauth == resultKey else False # aiotfm
+                    self.client.canLogin[2] = True
+                
+                    # URL
+                    for _url in self.server.serverURL:
+                        if url.startswith(_url):
+                            self.client.canLogin[3] = True
                             break
-
-                    if not canLogin:
-                        self.client.sendServerMessage("[<J>Information</J>] Invalid login url of ip [<J>%s</J>] and name [<V>%s</V>]. Link is [<R>%s</R>] " %(self.client.ipAddress, playerName, url))
-                        self.client.sendPacket(Identifiers.old.send.Player_Ban_Login, [0, "Acesse pelo site: %s" %(self.server.serverURL[0])])
-                        self.client.transport.loseConnection()
-                        return
-
-
-                    elif self.server.checkExistingUser(playerName):
+                    
+                    if self.server.checkExistingUser(playerName):
                         self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(3).writeUTF(playerName).writeUTF("").toByteArray())
                     elif not re.match("^(?=^(?:(?!.*_$).)*$)(?=^(?:(?!_{2,}).)*$)[A-Za-z][A-Za-z0-9_]{2,11}$", playerName):
                         self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(5).writeUTF("").writeUTF("").toByteArray())
@@ -812,63 +841,84 @@ class Packets:
                         self.Cursor.execute("insert into users values (%s, %s, %s, 1, 0, 0, 0, 0, %s, %s, 0, 0, 0, 0, 0, 0, 0, 0, '', '', '', '1;0,0,0,0,0,0,0,0,0,0,0', '0,0,0,0,0,0,0,0,0,0', '78583a', '95d9d6', %s, '', '', '', '', '', '', '', '', '', 0, 0, 0, 32, '', 0, '', '', 0, 0, '', 0, 0, 0, '', '', '0,0,0,0', '0,0,0,0', '0,0,0', '', '', 0, 0, 0, 0, '', 0, 0, '', '', '', %s, '', '24:0', 0, %s, '0.jpg', %s, '', 0, 0, %s)", [playerName, password, self.server.lastPlayerID, self.server.initialCheeses, self.server.initialFraises, Utils.getTime(), self.client.langue, self.client.computerLanguage, email, '{}'])
                         self.client.loginPlayer(playerName, password, "\x03[Tutorial] %s" %(playerName))
                         self.client.sendServerMessage("The ip %s created account <V>%s</V>. (<J>%s</J>)." %(self.client.ipAddress, playerName, self.client.langue))
-                        if "?id=" in url:
-                            link = url.split("?id=")
-                            self.Cursor.execute("select IP from loginlog where Username = %s", [self.server.getPlayerName(int(link[1]))])
-                            ipPlayer = self.Cursor.fetchone()[0]
-                            self.Cursor.execute("select Password from users where Password = %s", [password])
-                            passProtection = self.Cursor.fetchone()[0]
                     return
                 else:
                     self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(5).writeByte(0).writeByte(0).writeUTF(playerName).toByteArray())
 
-            elif CC == Identifiers.recv.Login.Login:
+            elif CC == Identifiers.recv.Login.Login: ################
                 playerName, password, url, startRoom, resultKey = Utils.parsePlayerName(packet.readUTF()), packet.readUTF(), packet.readUTF(), packet.readUTF(), packet.readInt()
-                #print(url)
-                
-                #authKey = self.server.authKey
-                #for value in self.server.loginKeys:
-                #    authKey ^= value
-                #
-                #if authKey != resultKey: 
-                #    pass # aiotfm
+                # Login Keys
+                if len(self.server.loginKeys) > 0:
+                    tempauth = self.server.authKey
+                    for value in self.server.loginKeys:
+                        if value != "":
+                            tempauth ^= value
+                    
+                    #self.client.canLogin[2] = True if tempauth == resultKey else False # aiotfm
+                    self.client.canLogin[2] = True
+                else:
+                    self.client.canLogin[2] = True
 
-                if not len(self.client.playerName) == 0:
-                    self.client.sendServerMessage("[<J>Information</J>] Attempt to login multiple accounts. (IP:%s / Name:%s) " %(self.client.ipAddress, self.client.playerName))
-                    self.client.sendPacket(Identifiers.old.send.Player_Ban_Login, [0, "Attempt to login multiple accounts."])
-                    self.client.transport.loseConnection()
-                    return
-                elif playerName == "" and not password == "":
+                # URL
+                for _url in self.server.serverURL:
+                    if url.startswith(_url):
+                        self.client.canLogin[3] = True
+                        break
+
+                if playerName == "" and password != "":
                     self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(2).writeUTF(playerName).writeUTF("").toByteArray())
                 else:
                     self.client.loginPlayer(playerName, password, startRoom)
-                    return
+                return
 
             elif CC == Identifiers.recv.Login.New_Survey:
                 if self.client.privLevel != 9:
                     return
-                p = ByteArray()
                 options = []
-                description = packet.readUTF()
-                for i in range(0, 6):
-                    option = packet.readUTF()
-                    if option != "":
-                        options.append(option)
-                p.writeInt(1).writeUTF("").writeBoolean(False).writeUTF(description)
-                for option in options:
-                    p.writeUTF(option)
+                description = "[" + self.client.playerName + "] " + packet.readUTF()
+                while packet.bytesAvailable():
+                    options.append(packet.readUTF())
                 if len(options) > 0:
-                    self.client.sendPacket(Identifiers.send.Survey, p.toByteArray())
+                    packet1 = ByteArray()
+                    packet2 = ByteArray()
+                    packet1.writeInt(self.client.playerID).writeUTF("").writeBoolean(False).writeUTF(description)
+                    packet2.writeInt(1).writeUTF("").writeBoolean(False).writeUTF(description)
+                    for option in options:
+                        packet1.writeUTF(option)
+                        packet2.writeUTF(option)
+                  
+                    for player in self.server.players.copy().values():
+                        if player.langue == self.client.langue:
+                            player.sendPacket(Identifiers.send.Survey, packet1.toByteArray())
+                        else:
+                            player.sendPacket(Identifiers.send.Survey, packet2.toByteArray())
+                else:
+                    self.client.sendClientMessage("Your survey must require one option.", True)
                 return
 
-            elif CC == Identifiers.recv.Login.Survey_Answer:
-                unknown = packet.readInt()
+            elif CC == Identifiers.recv.Login.Survey_Answer: 
+                playerID = packet.readInt()
                 optionID = packet.readByte()
-                self.client.sendPacket([26, 17], ByteArray().writeByte(optionID).toByteArray())
+                for player in self.server.players.copy().values():
+                    if playerID == player.playerID:
+                        player.sendPacket(Identifiers.send.Survey_Answer, ByteArray().writeByte(optionID).toByteArray())
                 return
                 
-            elif CC == 18:
-                print(4)
+            elif CC == Identifiers.recv.Login.Survey_Result:
+                if self.client.privLevel != 9:
+                    return
+                description = packet.readUTF()
+                results = []
+                p = ByteArray()
+                while packet.bytesAvailable():
+                    results.append(packet.readUTF())
+                p.writeInt(0).writeUTF("").writeBoolean(False).writeUTF(description)
+                for result in results:
+                    p.writeUTF(result)
+                
+                for player in self.server.players.copy().values():
+                    if player.langue == self.client.langue and player.playerName != self.client.playerName:
+                        player.sendPacket(Identifiers.send.Survey, p.toByteArray())
                 return
                 
             elif CC == Identifiers.recv.Login.Captcha:
@@ -898,16 +948,16 @@ class Packets:
 
             elif CC == Identifiers.recv.Login.Player_Info:
                 info = packet.readShort()
-                self.client.sendPacket([26, 28], ByteArray().writeByte(0).writeShort(info).toByteArray())
+                self.client.sendPacket(Identifiers.send.Player_Info, ByteArray().writeByte(0).writeShort(info).toByteArray())
                 return
 
             elif CC == Identifiers.recv.Login.Player_FPS:
                 info = packet.readShort()
-                self.client.sendPacket([26, 13], ByteArray().writeByte(0).writeShort(info).toByteArray())
+                self.client.sendPacket(Identifiers.send.Player_FPS, ByteArray().writeByte(0).writeShort(info).toByteArray())
                 return
 
-            elif CC == Identifiers.recv.Login.Undefined:
-                self.client.sendPacket([26, 40])
+            elif CC == Identifiers.recv.Login.Request_Info:
+                self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray())
                 return
 
         elif C == Identifiers.recv.Transformation.C:
@@ -952,29 +1002,48 @@ class Packets:
                 self.client.sendShamanType(type, (self.client.shamanSaves >= self.server.minimumNormalSaves and self.client.hardModeSaves >= self.server.minimumHardSaves), self.client.isNoShamanSkills)
                 return
 
-            elif CC == Identifiers.recv.Informations.Letter: 
-                playerName = Utils.parsePlayerName(packet.readUTF())[:-5]
-                type = packet.readByte()
-                letter = packet.readUTFBytes(packet.getLength())
+            elif CC == Identifiers.recv.Informations.Letter:
+                playerName = Utils.parsePlayerName(packet.readUTF())
+                type_letter = packet.readByte()
+                letters = packet.readUTFBytes(packet.getLength())
+                consumables = {0:29, 1:30, 2:2241, 3:2330, 4:2351, 5:2522}
+                if type_letter in consumables:
+                    count = self.client.playerConsumables[consumables[type_letter]] - 1
+                    if count <= 0:
+                        del self.client.playerConsumables[consumables[type_letter]]
+                    else:
+                        self.client.playerConsumables[consumables[type_letter]] = count
+                        
+                    self.client.sendPacket(Identifiers.send.Use_Inventory_Consumable, ByteArray().writeInt(self.client.playerCode).writeShort(consumables[type_letter]).toByteArray())
+                    self.client.sendUpdateInventoryConsumable(consumables[type_letter], count)
+                    
                 player = self.server.players.get(playerName)
-                if (player != None): 
+                if (player != None):
                     p = ByteArray()
                     p.writeUTF(self.client.playerName)
                     p.writeUTF(self.client.playerLook)
                     p.writeByte(type)
-                    p.writeBytes(letter)
+                    p.writeBytes(letters)
                     player.sendPacket(Identifiers.send.Letter, p.toByteArray())
                     self.client.sendLangueMessage("", "$MessageEnvoye")
                 else:
-                    self.client.sendLangueMessage("", "$Joueur_Existe_Pas")
+                    playerID = self.server.getPlayerID(playerName)
+                    self.Cursor.execute(f"SELECT Letters from Users WHERE PlayerID = '{playerID}'")
+                    hashed_letters = self.Cursor.fetchone()[0]
+                    if playerID != -1:
+                        hashed_letters += ("" if len(hashed_letters) == 0 else "$") + "|".join(map(str, [self.client.playerName, str(int(self.client.mouseColor, 16)) + "##" + str(self.client.playerLook), type_letter, base64.b64encode(zlib.compress(letters)).decode()]))
+                        self.Cursor.execute(f"UPDATE Users SET Letters = '{hashed_letters}' WHERE PlayerID = '{playerID}'")
+                    else:
+                        self.client.sendLangueMessage("", "$Joueur_Existe_Pas")
                 return
 
             elif CC == Identifiers.recv.Informations.Send_gift:
-                self.client.sendPacket(Identifiers.send.Send_gift, 1)
+                self.client.sendPacket(Identifiers.send.Send_gift, ByteArray().writeByte(1).toByteArray())
                 return
 
-            elif CC == Identifiers.recv.Informations.Computer_Info: # Receive computer's default language.
+            elif CC == Identifiers.recv.Informations.Computer_Info:
                 self.client.computerLanguage = packet.readUTF()
+                self.client.canLogin[0] = True if len(self.client.computerLanguage) > 0 else False
                 return
 
             elif CC == Identifiers.recv.Informations.Change_Shaman_Color:
@@ -982,8 +1051,8 @@ class Packets:
                 self.client.shamanColor = "%06X" %(0xFFFFFF & color)
                 return
 
-            elif CC == Identifiers.recv.Informations.Request_Info:
-                self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray())
+            elif CC == Identifiers.recv.Informations.Tribulle_API:
+                self.client.sendPacket(Identifiers.send.Tribulle_Token, ByteArray().writeUTF("1dDV8aieaE0mCplWlxz2uJgRiH6tIjcw7kvdPEhibvC8dSTnVs").toByteArray())
                 return
                 
         elif C == Identifiers.recv.Lua.C:
@@ -1000,20 +1069,12 @@ class Packets:
 
             elif CC == Identifiers.recv.Lua.Key_Board: 
                 key, down, posX, posY = packet.readShort(), packet.readBoolean(), packet.readShort(), packet.readShort()
-                mars = {87:87,38:87,65:65,37:65,68:68,39:68,83:83,40:83}
-                chars = {87:"↑",65:"←",68:"→",83:"↓"}
-                if key in mars and self.client.playerName in self.server.sonar:
-                    end = _time.time()
-                    key = mars[key]
-                    if down:
-                        self.temps[key] = end
-                    else:
-                        time = int((end - self.temps[key])*1000) - self.client.PInfo[2] # reduce the delay of ping
-                        if time < 0: time = 0
-                        time = str(time)
-                        while len(time) < 4: 
-                            time = " " + time
-                        self.server.sonar[self.client.playerName].append(f"<BL>{chars[key]}<G> + <V>{time}</V> ms")
+                if self.client.room.isBootcamp and key == 71:
+                    if not self.client.isDead:
+                        self.client.isDead = True
+                        if not self.client.room.noAutoScore: self.client.playerScore += 1
+                        self.client.sendPlayerDied()
+                    
                 if self.client.room.luaRuntime != None:
                     self.client.room.luaRuntime.emit("Keyboard", (self.client.playerName, key, down, posX, posY))
                 return
@@ -1152,10 +1213,16 @@ class Packets:
 
             elif CC == Identifiers.recv.Inventory.Equip_Consumable:
                 id, equip = packet.readShort(), packet.readBoolean()
-                if id in self.client.equipedConsumables:
-                    self.client.equipedConsumables.remove(id)
-                else:
+                if equip:
+                    if id in self.client.equipedConsumables:
+                        self.client.equipedConsumables.remove(id)
                     self.client.equipedConsumables.append(id)
+                else:
+                    self.client.equipedConsumables.remove(id)
+                #if id in self.client.equipedConsumables:
+                #    self.client.equipedConsumables.remove(id)
+                #else:
+                #    self.client.equipedConsumables.append(id)
                 return
                 
             elif CC == Identifiers.recv.Inventory.Trade_Invite:
@@ -1179,7 +1246,10 @@ class Packets:
                 return
 
         elif C == Identifiers.recv.Tribulle.C:
-            if CC == Identifiers.recv.Tribulle.Tribulle:
+            if CC == Identifiers.recv.Tribulle.Old_Tribulle:
+                return
+            
+            elif CC == Identifiers.recv.Tribulle.Tribulle:
                 if not self.client.isGuest:
                     code = packet.readShort()
                     self.client.tribulle.parseTribulleCode(code, packet)
@@ -1222,8 +1292,8 @@ class Packets:
                     self.client.buyNPCItem(packet.readByte())
                 return
 
-            elif CC == Identifiers.recv.Transformice.Question: 
-                pass
+            #elif CC == Identifiers.recv.Transformice.Question: 
+            #    pass
 
             elif CC == Identifiers.recv.Transformice.Map_Info:
                 self.client.room.cheesesList = []
@@ -1252,88 +1322,12 @@ class Packets:
                     lineY = int(packet.readShort())
                     self.client.room.sendAllOthers(self.client, Identifiers.send.Crazzy_Packet, self.client.getCrazzyPacket(2,[self.client.playerCode, self.client.drawingColor, posX, posY, lineX, lineY]))
 
-            elif CC == Identifiers.recv.Transformice.Full_Look: 
-                p = ByteArray(packet.toByteArray())
-                visuID = p.readShort()
-                shopItems = [] if self.client.shopItems == "" else self.client.shopItems.split(",")
-                look = self.server.shopOutfitsCheck[visuID].split(";")
-                look[0] = int(look[0])
-                lengthCloth = len(self.client.clothes)
-                buyCloth = 5 if (lengthCloth == 0) else (50 if lengthCloth == 1 else 100)
-
-                self.client.visuItems = {-1: {"ID": -1, "Buy": buyCloth, "Bonus": True, "Customizable": False, "HasCustom": False, "CustomBuy": 0, "Custom": "", "CustomBonus": False}, 22: {"ID": self.client.getFullItemID(22, look[0]), "Buy": self.client.getItemInfo(22, look[0])[6], "Bonus": False, "Customizable": False, "HasCustom": False, "CustomBuy": 0, "Custom": "", "CustomBonus": False}}
-
-                count = 0
-                for visual in look[1].split(","):
-                    if not visual == "0":
-                        item, customID = visual.split("_", 1) if "_" in visual else [visual, ""]
-                        item = int(item)
-                        itemID = self.client.getFullItemID(count, item)
-                        itemInfo = self.client.getItemInfo(count, item)
-                        self.client.visuItems[count] = {"ID": itemID, "Buy": itemInfo[6], "Bonus": False, "Customizable": bool(itemInfo[2]), "HasCustom": customID != "", "CustomBuy": itemInfo[7], "Custom": customID, "CustomBonus": False}
-                        if self.client.Shop.checkInShop(self.client.visuItems[count]["ID"]):
-                            self.client.visuItems[count]["Buy"] -= itemInfo[6]
-                        if len(self.client.custom) == 1:
-                            if itemID in self.client.custom:
-                                self.client.visuItems[count]["HasCustom"] = True
-                            else:
-                                self.client.visuItems[count]["HasCustom"] = False
-                        else:
-                            if str(itemID) in self.client.custom:
-                                self.client.visuItems[count]["HasCustom"] = True
-                            else:
-                                self.client.visuItems[count]["HasCustom"] = False
-                    count += 1
-                hasVisu = map(lambda y: 0 if y in shopItems else 1, map(lambda x: x["ID"], self.client.visuItems.values()))
-                visuLength = reduce(lambda x, y: x + y, hasVisu)
-                allPriceBefore = 0
-                allPriceAfter = 0
-                promotion = 70.0 / 100
-
-                p.writeUnsignedShort(visuID)
-                p.writeUnsignedByte(20)
-                p.writeUTF(self.server.shopOutfitsCheck[visuID])
-                p.writeUnsignedByte(visuLength)
-
-                for category in self.client.visuItems.keys():
-                    if len(self.client.visuItems.keys()) == category:
-                        category = 22
-                    itemID = self.client.getSimpleItemID(category, self.client.visuItems[category]["ID"])
-
-                    buy = [self.client.visuItems[category]["Buy"], int(self.client.visuItems[category]["Buy"] * promotion)]
-                    customBuy = [self.client.visuItems[category]["CustomBuy"], int(self.client.visuItems[category]["CustomBuy"] * promotion)]
-
-                    p.writeShort(self.client.visuItems[category]["ID"])
-                    p.writeUnsignedByte(2 if self.client.visuItems[category]["Bonus"] else (1 if not self.client.Shop.checkInShop(self.client.visuItems[category]["ID"]) else 0))
-                    p.writeUnsignedShort(buy[0])
-                    p.writeUnsignedShort(buy[1])
-                    p.writeUnsignedByte(3 if not self.client.visuItems[category]["Customizable"] else (2 if self.client.visuItems[category]["CustomBonus"] else (1 if self.client.visuItems[category]["HasCustom"] == False else 0)))
-                    p.writeUnsignedShort(customBuy[0])
-                    p.writeUnsignedShort(customBuy[1])
-                    
-                    allPriceBefore += buy[0] + customBuy[0]
-                    allPriceAfter += (0 if (self.client.visuItems[category]["Bonus"]) else (0 if self.client.Shop.checkInShop(itemID) else buy[1])) + (0 if (not self.client.visuItems[category]["Customizable"]) else (0 if self.client.visuItems[category]["CustomBonus"] else (0 if self.client.visuItems[category]["HasCustom"] else (customBuy[1]))))
-                    
-                p.writeShort(allPriceBefore)
-                p.writeShort(allPriceAfter)
-                self.client.priceDoneVisu = allPriceAfter
-                self.client.sendPacket(Identifiers.send.Buy_Full_Look, p.toByteArray())
+            elif CC == Identifiers.recv.Transformice.Full_Look:
+                self.client.Shop.buyFullLook(str(packet.readShort()))
                 return
                 
-        elif C == Identifiers.recv.Language.C:
-            if CC == Identifiers.recv.Language.BotProtection:
-                packet.decryptIdentification(self.server.packetKeys, str(self.client.verifycoder).encode())
-                code = packet.readInt()
-                st1 = packet.readUTF()
-                code2 = packet.readInt()
-                st2 = packet.readUTF()
-                code3 = packet.readInt()
-                if (code != self.client.verifycoder) or st1 != '--' or (code2 != self.client.verifycoder) or st2 != '---' or (code3 != self.client.verifycoder) or (not packet.bytesAvailable()):
-                    self.client.transport.close()
-                else: self.client.canlogin2 = True
-                return
-                
-            elif CC == Identifiers.recv.Language.Set_Language:
+        elif C == Identifiers.recv.Language.C:                
+            if CC == Identifiers.recv.Language.Set_Language:
                 langue = packet.readUTF().upper()
                 self.client.langue = langue
                 if "-" in self.client.langue:
@@ -1355,6 +1349,20 @@ class Packets:
                 self.client.sendPacket(Identifiers.send.Language_List, data.toByteArray())                                              
                 return
                 
+            elif CC == Identifiers.recv.Language.BotProtection:
+                packet.decryptIdentification(self.server.packetKeys, str(self.client.verifycoder).encode())
+                code = packet.readInt()
+                st1 = packet.readUTF()
+                code2 = packet.readInt()
+                st2 = packet.readUTF()
+                code3 = packet.readInt()
+                if (code != self.client.verifycoder) or st1 != '--' or (code2 != self.client.verifycoder) or st2 != '---' or (code3 != self.client.verifycoder) or (not packet.bytesAvailable()):
+                    self.client.transport.close()
+                    self.client.canLogin[1] = False
+                else:
+                    self.client.canLogin[1] = True
+                return
+                
         elif C == Identifiers.recv.Others.C:
             if CC == Identifiers.recv.Others.Open_Missions:
                 self.client.missions.sendMissions()
@@ -1364,27 +1372,33 @@ class Packets:
                 missionID = packet.readShort()
                 self.client.missions.changeMission(str(missionID))
                 return
-            
-            elif CC == Identifiers.recv.Others.Cafe:
-                topicID, delete = packet.readInt(), packet.readBoolean()
-                self.client.Cafe.CheckMessageType(topicID, delete)
-                return
-            
+
             elif CC == Identifiers.recv.Others.Report_Cafe_Post:
                 PostID = packet.readInt()
                 TopicID = packet.readInt()
                 self.client.Cafe.ReportCafeTopic(TopicID, PostID)
                 return
-            
-            elif CC == Identifiers.recv.Others.View_Posts:
-                playerName = packet.readUTF()
-                self.client.Cafe.ViewCafeMessages(playerName)
-                return
-            
+
             elif CC == Identifiers.recv.Others.Send_Warnings:
                 self.client.Cafe.sendWarnings()
+                return            
+
+            elif CC == Identifiers.recv.Others.Check_Cafe_Message:
+                topicID, delete = packet.readInt(), packet.readBoolean()
+                self.client.Cafe.CheckMessageType(topicID, delete)
                 return
-                
+                                                    
+            elif CC == Identifiers.recv.Others.Sonar_System:
+                if self.client.playerName not in self.server.sonar:
+                    return
+                key = packet.readByte()
+                time = packet.readInt()
+                r1 = packet.readByte()
+                r2 = packet.readByte()
+                chars = {38:"↑",37:"←",39:"→",40:"↓",87:"↑",68:"→",65:"←",83:"↓"}
+                self.server.sonar[self.client.playerName].append(f"<BL>{chars[key]}<G> + <V>{time}</V> ms")
+                #return
+                                                    
             elif CC == Identifiers.recv.Others.Attach_Player:
                 self.client.room.sendAll(Identifiers.send.SetPositionToAttach, ByteArray().writeByte(-1).toByteArray())
                 self.client.room.sendAll(Identifiers.send.AttachPlayer, ByteArray().writeInt(packet.readInt()).writeInt(1).writeInt(1*1000).toByteArray())
@@ -1394,13 +1408,103 @@ class Packets:
                 self.client.room.sendAll(Identifiers.send.SetPositionToAttach, ByteArray().writeByte(-1).toByteArray())
                 return
 
-            elif CC == Identifiers.recv.Others.Open_Sales:
-                self.client.sendPacket([144, 29], ByteArray().writeUTF("").toByteArray())
+            elif CC == Identifiers.recv.Others.Open_Outfits:
+                if self.client.privLevel not in [3, 9] and not self.client.isFashionSquad:
+                    return
+                p = ByteArray()
+                p.writeInt(len(self.server.shopOutfitsCheck))
+                for id in self.server.shopOutfitsCheck:
+                    p.writeInt(int(id))
+                    p.writeUTF(self.server.shopOutfitsCheck[id][3])
+                    p.writeInt(int(self.server.shopOutfitsCheck[id][1]))
+                    p.writeUTF(str(datetime.fromtimestamp(int(self.server.shopOutfitsCheck[id][4]),tz=None)).split(' ')[0])
+                    p.writeUTF(self.server.shopOutfitsCheck[id][0])
+                    p.writeByte(2 if not int(self.server.shopOutfitsCheck[id][5]) else 3)
+                self.client.sendPacket(Identifiers.send.Open_Outfits, p.toByteArray())
+                return
+                
+            elif CC == Identifiers.recv.Others.Add_Outfit:
+                if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
+                    return
+                name = packet.readUTF()
+                bg = packet.readShort()
+                date = int(packet.readUTF())
+                look = packet.readUTF()
+                self.server.shopData["fullLooks"].append({"id":self.server.lastoutfitid(),"name":name,"look":look,"bg":bg,"start":date,"discount":20, "perm":0})
+                self.server.updateShop()
+                return await self.parsePacket(1,149,12,ByteArray())
+            
+            elif CC == Identifiers.recv.Others.Remove_Outfit:
+                if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
+                    return
+                id = packet.readInt()
+                for i in self.server.shopData["fullLooks"]:
+                    if int(i["id"]) == id:
+                        self.server.shopData["fullLooks"].remove(i)
+                        break
+                self.server.updateShop()
+                return await self.parsePacket(1,149,12,ByteArray())
+
+            elif CC == Identifiers.recv.Others.View_Posts:
+                if self.client.privLevel >= 7:
+                    playerName = packet.readUTF()
+                    self.client.Cafe.ViewCafeMessages(playerName)
                 return
 
+            elif CC == Identifiers.recv.Others.Open_Sales: #########
+                if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
+                    return
+                packet = ByteArray()
+                packet.writeEncoded(len(self.server.promotions))
+                x = 1
+                self.data = {}
+                for promo in self.server.promotions:
+                    packet.writeEncoded(x)
+                    packet.writeUTF(f'{promo[0]},{promo[1]}')
+                    self.data[x] = [promo[0],promo[1]]
+                    try: timer = promo[4]
+                    except: timer = _time.time()
+                    packet.writeUTF(str(datetime.fromtimestamp(int(timer),tz=None)))
+                    packet.writeUTF(str(datetime.fromtimestamp(int(promo[3]),tz=None)))
+                    packet.writeEncoded(promo[2])
+                    packet.writeEncoded(2) # 2 if is not on shop and 1 if is on shop 
+                    x+=1
+                self.client.sendPacket(Identifiers.send.Open_Sales, packet.toByteArray())
+                return
+                
             elif CC == Identifiers.recv.Others.Add_Sale:
-                return
+                if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
+                    return
+                item_id = packet.readUTF()
+                starting_date = packet.readUTF()
+                ending_date = packet.readUTF()
+                amount = packet.readByte()
+                self.server.promotions.append([int(item_id.split(',')[0]),int(item_id.split(',')[1]),amount,int(ending_date),int(starting_date)])
+                self.server.savePromotions()
+                self.server.loadPromotions()
+                return await self.parsePacket(1,149,16,ByteArray())
+            
+            elif CC == Identifiers.recv.Others.Remove_Sale:
+                if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
+                    return
+                id = packet.readInt()
+                if not id in self.data: return
+                for promotion in self.server.promotions:
+                    if promotion[0] == self.data[id][0] and promotion[1] == self.data[id][1]:
+                        self.server.promotions.remove(promotion)
+                        i = 0
+                        while i < len(self.server.shopPromotions):
+                            if self.server.shopPromotions[i][0] == promotion[0] and self.server.shopPromotions[i][1] == promotion[1]:
+                                del self.server.shopPromotions[i]
+                            i += 1
+                        break
+                self.server.savePromotions()
+                return await self.parsePacket(1,149,16,ByteArray())
 
+            elif CC == 9: # [144, 19] --> CC -> 9
+                return
+                #return
+                
         if self.server.isDebug:
             print("[%s] Packet not implemented - C: %s - CC: %s - packet: %s" %(self.client.playerName, C, CC, repr(packet.toByteArray())))
             with open("./include/logs/Errors/Debug.log", "a") as f:

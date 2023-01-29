@@ -1,14 +1,17 @@
 #coding: utf-8
-import binascii
+import binascii, time
 
 from ByteArray import ByteArray
 from Identifiers import Identifiers
+from functools import reduce
 
 class Shop:
     def __init__(self, player, server):
         self.client = player
         self.server = player.server
         self.Cursor = player.Cursor
+        self.presents = ""
+        self.messages = ""
 
     def getShopLength(self):
         return 0 if self.client.shopItems == "" else len(self.client.shopItems.split(","))
@@ -59,12 +62,12 @@ class Shop:
             return False
 
     def checkInPlayerShop(self, type, playerName, checkItem):
-        self.Cursor.execute("select %s from Users where Username = ?" %(type), [playerName])
+        self.Cursor.execute(f"select '{type}' from Users WHERE Username = '{playerName}'")
         for rs in self.Cursor.fetchall():
-            items = rs[type]
-            if not items == "":
-                for shopItem in items.split(","):
-                    if checkItem == int(shopItem.split("_")[0] if "_" in shopItem else shopItem):
+            items = list(rs)
+            if not len(items) == 1:
+                for shopItem in items:
+                    if shopItem != type and checkItem == int(shopItem.split("_")[0] if "_" in shopItem else shopItem):
                         return True
             else:
                 return False
@@ -97,7 +100,13 @@ class Shop:
     def getShopItemPrice(self, fullItem):
         itemCat = (0 if fullItem // 10000 == 1 else fullItem // 10000) if fullItem > 9999 else fullItem // 100
         item = fullItem % 1000 if fullItem > 9999 else fullItem % 100 if fullItem > 999 else fullItem % (100 * itemCat) if fullItem > 99 else fullItem
-        return self.getItemPromotion(itemCat, item, self.server.shopListCheck[str(itemCat) + "|" + str(item)][1])
+        item_idx = str(itemCat) + "|" + str(item)
+        if item_idx in self.server.shopListCheck:
+            return self.getItemPromotion(itemCat, item, self.server.shopListCheck[item_idx][1])
+        else:
+            if self.server.isDebug:
+                print(f"[INVALID] The item id {itemCat} in category {item} does not exist in the shop.")
+            return 0
                 
     def getShamanShopItemPrice(self, fullItem):
         return self.server.shamanShopListCheck[str(fullItem)][1]
@@ -105,7 +114,7 @@ class Shop:
     def getItemPromotion(self, itemCat, item, price):
         for promotion in self.server.shopPromotions:
             if promotion[0] == itemCat and promotion[1] == item:
-                return int(promotion[2] // 100.0 * price)
+                return price - int(promotion[2] / 100.0 * price)
         return price
 
     def sendShopList(self):
@@ -134,17 +143,21 @@ class Shop:
         for item in shop:
             packet.writeShort(item["category"]).writeShort(item["id"]).writeByte(item["customs"]).writeBoolean(item["new"]).writeBoolean("purchasable" in item).writeInt(item["cheese"]).writeInt(item["fraise"]).writeByte(0)
 
-        visuais = self.server.shopOutfitsCheck if sendItems else []
-        packet.writeByte(len(visuais))
-        for item in visuais:
-            packet.writeShort(item["id"])
-            packet.writeUTF("".join(item["look"]))
-            packet.writeByte(item["bg"])
+        looks = {}
+        if sendItems:
+            for id in self.server.shopOutfitsCheck:
+                if self.server.shopOutfitsCheck[id][4] <= int(time.time()):
+                    looks[id] = self.server.shopOutfitsCheck[id]
+        packet.writeByte(len(looks))
+        for id in looks:
+            packet.writeShort(id)
+            packet.writeUTF(looks[id][0])
+            packet.writeByte(looks[id][1])
             
         packet.writeShort(len(self.client.clothes))
         for clothe in self.client.clothes:
             clotheSplited = clothe.split("/")
-            packet.writeUTF(clotheSplited[1] + ";" + clotheSplited[2] + ";" + clotheSplited[3])    
+            packet.writeUTF(clotheSplited[1] + ";" + clotheSplited[2] + ";" + clotheSplited[3])
 
         shamanItems = [] if self.client.shamanItems == "" else self.client.shamanItems.split(",")
         packet.writeShort(len(shamanItems))
@@ -228,10 +241,9 @@ class Shop:
         self.client.room.sendAll(Identifiers.send.Unlocked_Badge, ByteArray().writeInt(self.client.playerCode).writeShort(badge).toByteArray())
 
     def sendShopGiftPacket(self, type, playerName):
-        self.client.sendPacket(Identifiers.send.Gift_result, ByteArray().writeByte(type).writeByte(0).writeUTF(playerName).writeByte(0).writeShort(0).toByteArray())
+        self.client.sendPacket(Identifiers.send.Gift_result, ByteArray().writeByte(type).writeUTF(playerName).writeByte(0).writeInt(0).toByteArray())
 
-    def equipClothe(self, packet):
-        clotheID = packet.readByte()
+    def equipClothe(self, clotheID):
         for clothe in self.client.clothes:
             values = clothe.split("/")
             if values[0] == "%02d" %(clotheID):
@@ -242,8 +254,7 @@ class Shop:
         self.sendLookChange()
         self.sendShopList(False)
 
-    def saveClothe(self, packet):
-        clotheID = packet.readByte()
+    def saveClothe(self, clotheID):
         for clothe in self.client.clothes:
             values = clothe.split("/")
             if values[0] == "%02d" %(clotheID):
@@ -258,44 +269,31 @@ class Shop:
     def sendShopInfo(self):            
         self.client.sendPacket(Identifiers.send.Shop_Info, ByteArray().writeInt(self.client.shopCheeses).writeInt(self.client.shopFraises).toByteArray())
 
-    def equipItem(self, packet):
-        fullItem = packet.readInt()
-        itemStr = str(fullItem)
-        itemCat = int((0 if fullItem / 10000 == 1 else fullItem /10000) if len(itemStr) > 4 else fullItem / 100)
-        item = int(itemStr[2 if len(itemStr) > 3 else 1:]) if len(itemStr) >= 3 else fullItem
-        itemStr = str(item)
-
-        equip = str(item) + self.getItemCustomization(fullItem, False)
-
+    def equipItem(self, fullItem):
+        itemCat = (fullItem - 10000) // 10000 if fullItem > 9999 else fullItem // 100
+        item = fullItem % 1000 if fullItem > 9999 else fullItem % 100 if fullItem > 999 else fullItem % (100 * itemCat) if fullItem > 99 else fullItem
         lookList = self.client.playerLook.split(";")
         lookItems = lookList[1].split(",")
         lookCheckList = lookItems[:]
-        idx = 0
-        while idx < len(lookCheckList):
-            lookCheckList[idx] = lookCheckList[idx].split("_")[0] if "_" in lookCheckList[idx] else lookCheckList[idx]
-            idx += 1
+        i = 0
+        while i < len(lookCheckList):
+            lookCheckList[i] = lookCheckList[i].split("_")[0] if "_" in lookCheckList[i] else lookCheckList[i]
+            i += 1
 
         if itemCat <= 10:
-            if lookCheckList[itemCat] == itemStr:
-                lookItems[itemCat] = "0"
-            else:
-                lookItems[itemCat] = str(equip)
-
+            lookItems[itemCat] = "0" if lookCheckList[itemCat] == str(item) else str(item) + self.getItemCustomization(fullItem, False)
         elif itemCat == 21:
             lookList[0] = "1"
             color = "bd9067" if item == 0 else "593618" if item == 1 else "8c887f" if item == 2 else "dfd8ce" if item == 3 else "4e443a" if item == 4 else "e3c07e" if item == 5 else "272220" if item == 6 else "78583a"
             self.client.mouseColor = "78583a" if self.client.mouseColor == color else color
         else:
-            if lookList[0] == itemStr:
-                lookList[0] = "1"
-            else:
-                lookList[0] = itemStr
+            lookList[0] = "1" if lookList[0] == str(item) else str(item)
+            self.client.mouseColor = "78583a"
 
         self.client.playerLook = lookList[0] + ";" + ",".join(map(str, lookItems))
         self.sendLookChange()
 		
-    def buyItem(self, packet):
-        fullItem, withFraises = packet.readInt(), packet.readBoolean()
+    def buyItem(self, fullItem, withFraises):
         itemCat = (fullItem - 10000) // 10000 if fullItem > 9999 else fullItem // 100
         item = fullItem % 1000 if fullItem > 9999 else fullItem % 100 if fullItem > 999 else fullItem % (100 * itemCat) if fullItem > 99 else fullItem
         self.client.shopItems += str(fullItem) if self.client.shopItems == "" else "," + str(fullItem)
@@ -312,9 +310,7 @@ class Shop:
         self.checkUnlockShopBadge(fullItem)
         self.client.missions.upMission('6')
 
-    def customItemBuy(self, packet):
-        fullItem, withFraises = packet.readInt(), packet.readBoolean()
-
+    def customItemBuy(self, fullItem, withFraises):
         items = self.client.shopItems.split(",")
         for shopItem in items:
             item = shopItem.split("_")[0] if "_" in shopItem else shopItem
@@ -337,16 +333,7 @@ class Shop:
                 
         self.sendShopList(False)
 
-    def customItem(self, packet):
-        fullItem, length = packet.readInt(), packet.readByte()
-        custom = length
-        customs = list()
-
-        i = 0
-        while i < length:
-            customs.append(packet.readInt())
-            i += 1
-
+    def customItem(self, fullItem, customs):
         items = self.client.shopItems.split(",")
         for shopItem in items:
             sItem = shopItem.split("_")[0] if "_" in shopItem else shopItem
@@ -356,7 +343,7 @@ class Shop:
                 items[items.index(shopItem)] = sItem + "_" + "+".join(newCustoms)
                 self.client.shopItems = ",".join(items)
 
-                itemCat = int((0 if fullItem // 10000 == 1 else fullItem // 10000) if fullItem > 9999 else fullItem / 100)
+                itemCat = (0 if fullItem // 10000 == 1 else fullItem // 10000) if fullItem > 9999 else fullItem // 100
                 item = fullItem % 1000 if fullItem > 9999 else fullItem % 100 if fullItem > 999 else fullItem % (100 * itemCat) if fullItem > 99 else fullItem
                 equip = str(item) + self.getItemCustomization(fullItem, False)
                 lookList = self.client.playerLook.split(";")
@@ -373,8 +360,7 @@ class Shop:
                 self.sendLookChange()
                 break
 
-    def buyShamanItem(self, packet):
-        fullItem, withFraises = packet.readShort(), packet.readBoolean()
+    def buyShamanItem(self, fullItem, withFraises):
         price = self.server.shamanShopListCheck[str(fullItem)][1 if withFraises else 0]
         self.client.shamanItems += str(fullItem) if self.client.shamanItems == "" else "," + str(fullItem)
 
@@ -386,8 +372,7 @@ class Shop:
         self.sendShopList(False)
         self.client.sendAnimZelda(1, fullItem)
 
-    def equipShamanItem(self, packet):
-        fullItem = packet.readInt()
+    def equipShamanItem(self, fullItem):
         item = str(fullItem) + self.getItemCustomization(fullItem, True)
         itemStr = str(fullItem)
         itemCat = int(itemStr[:len(itemStr)-2])
@@ -409,9 +394,7 @@ class Shop:
         self.client.shamanLook = ",".join(lookItems)
         self.sendShamanLook()
 
-    def customShamanItemBuy(self, packet):
-        fullItem, withFraises = packet.readInt(), packet.readBoolean()
-
+    def customShamanItemBuy(self, fullItem, withFraises):
         items = self.client.shamanItems.split(",")
         for shopItem in items:
             item = shopItem.split("_")[0] if "_" in shopItem else shopItem
@@ -427,14 +410,7 @@ class Shop:
                 
         self.sendShopList(False)
 
-    def customShamanItem(self, packet):
-        fullItem, length = packet.readInt(), packet.readByte()
-        customs = []
-        i = 0
-        while i < length:
-            customs.append(packet.readInt())
-            i += 1
-
+    def customShamanItem(self, fullItem, customs):
         items = self.client.shamanItems.split(",")
         for shopItem in items:
             sItem = shopItem.split("_")[0] if "_" in shopItem else shopItem
@@ -463,8 +439,7 @@ class Shop:
                 self.sendShamanLook()
                 break
 
-    def buyClothe(self, packet):
-        clotheID, withFraises = packet.readByte(), packet.readBoolean()
+    def buyClothe(self, clotheID, withFraises):
         self.client.clothes.append("%02d/1;0,0,0,0,0,0,0,0,0/78583a/%s" %(clotheID, "fade55" if self.client.shamanSaves >= 1000 else "95d9d6"))
         if withFraises:
             self.client.shopFraises -= 5 if clotheID == 0 else 50 if clotheID == 1 else 100
@@ -473,10 +448,9 @@ class Shop:
 
         self.sendShopList(False)
 
-    def sendShopGift(self, packet):
-        playerName, isShamanItem, fullItem, message = packet.readUTF(), packet.readBoolean(), packet.readShort(), packet.readUTF()
-        if not self.server.checkExistingUser(playerName):
-            self.sendShopGift(1, playerName)
+    def sendShopGift(self, playerName, isShamanItem, fullItem, message):
+        if not self.server.checkExistingUser(playerName) or playerName == self.client.playerName:
+            self.sendShopGiftPacket(1, playerName)
         else:
             player = self.server.players.get(playerName)
             if player != None:
@@ -484,26 +458,24 @@ class Shop:
                     self.sendShopGiftPacket(2, playerName)
                 else:
                     self.server.lastShopGiftID += 1
-                    player.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(self.client.playerName).writeUTF(self.client.playerLook).writeBoolean(isShamanItem).writeShort(fullItem).writeUTF(message).writeBoolean(False).toByteArray())
+                    player.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(self.client.playerName).writeUTF(self.client.playerLook).writeBoolean(isShamanItem).writeInt(fullItem).writeUTF(message).writeBoolean(False).toByteArray())
                     self.sendShopGiftPacket(0, playerName)
                     self.server.shopGifts[self.server.lastShopGiftID] = [self.client.playerName, isShamanItem, fullItem]
                     self.client.shopFraises -= self.getShamanShopItemPrice(fullItem) if isShamanItem else self.getShopItemPrice(fullItem)
                     self.sendShopList()
             else:
-                selfs = ""
                 if (self.checkInPlayerShop("ShamanItems" if isShamanItem else "ShopItems", playerName, fullItem)):
                     self.sendShopGiftPacket(2, playerName)
                 else:
-                    self.Cursor.execute("select selfs from Users where Username = ?", [playerName])
+                    self.Cursor.execute(f"select Gifts from Users where Username = '{playerName}'")
                     rs = self.Cursor.fetchone()
-                    selfs = rs[0]
-
-                selfs += ("" if selfs == "" else "/") + binascii.hexlify("|".join(map(str, [self.client.playerName, self.client.playerLook, isShamanItem, fullItem, message])))
-                self.Cursor.execute("update Users set selfs = ? where Username = ?", [selfs, playerName])
-                self.sendShopGiftPacket(0, playerName)
-
-    def giftResult(self, packet):
-        giftID, isOpen, message, isMessage = packet.readInt(), packet.readBoolean(), packet.readUTF(), packet.readBoolean()
+                    self.presents = rs[0]
+                    self.sendShopGiftPacket(0, playerName)
+                self.presents += ("" if len(self.presents) == 0 else "/") + binascii.hexlify("|".join(map(str, [self.client.playerName, self.client.playerLook, isShamanItem, fullItem, message])).encode()).decode()
+                self.Cursor.execute(f"update Users set Gifts = '{self.presents}' where Username = '{playerName}'")
+                self.presents = ""
+        
+    def giftResult(self, giftID, isOpen, message, isMessage):
         if isOpen:
             values = self.server.shopGifts[int(giftID)]
             player = self.server.players.get(str(values[0]))
@@ -522,37 +494,145 @@ class Shop:
                 self.checkUnlockShopTitle()
                 self.checkUnlockShopBadge(fullItem)
 
-        elif not message == "":
+        elif message:
             values = self.server.shopGifts[int(giftID)]
-            player = self.server.players.get(str(values[0]))
+            player = self.server.players.get(values[0])
             if player != None:
-                player.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(giftID).writeUTF(self.client.playerName).writeUTF(self.client.playerLook).writeBoolean(bool(values[1])).writeShort(int(values[2])).writeUTF(message).writeBoolean(True).toByteArray())
+                player.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(giftID).writeUTF(self.client.playerName).writeUTF(self.client.playerLook).writeBoolean(bool(values[1])).writeInt(int(values[2])).writeUTF(message).writeBoolean(True).toByteArray())
             else:
-                messages = ""
-                self.Cursor.execute("select Messages from Users where Username = ?", [str(values[0])])
+                self.messages = ""
+                self.Cursor.execute(f"select Messages from Users where Username = '{values[0]}'")
                 rs = self.Cursor.fetchone()
-                messages = rs[0]
+                self.messages = rs[0]
+                self.messages += ("" if self.messages == "" else "/") + binascii.hexlify("|".join(map(str, [self.client.playerName, self.client.playerLook, values[1], values[2], message])).encode()).decode()
+                self.Cursor.execute(f"update Users set Messages = '{self.messages}' where Username = '{values[0]}'")
 
-                messages += ("" if messages == "" else "/") + binascii.hexlify("|".join(map(str, [self.client.playerName, self.client.playerLook, values[1], values[2], message])))
-                self.Cursor.execute("update Users set Messages = ? where Username = ?", [messages, str(values[0])])
-
-    def checkselfsAndMessages(self, lastReceivedselfs, lastReceivedMessages):
-        needUpdate = False
-        gifts = lastReceivedselfs.split("/")
-        for gift in gifts:
+    def checkGiftsAndMessages(self):
+        for gift in self.client.shopGifts.split("/"):
             if not gift == "":
-                values = binascii.unhexlify(gift).split("|", 4)
+                values = binascii.unhexlify(gift.encode()).decode().split("|", 4)
                 self.server.lastShopGiftID += 1
-                self.client.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(values[0]).writeUTF(values[1]).writeBoolean(bool(values[2])).writeShort(int(values[3])).writeUTF(values[4] if len(values) > 4 else "").writeBoolean(False).toByteArray())
+                self.client.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(self.client.playerName).writeUTF(values[1]).writeBoolean(bool(values[1])).writeInt(int(values[3])).writeUTF(values[4] if len(values) > 4 or values[4] != '' else "").writeBoolean(False).toByteArray())
                 self.server.shopGifts[self.server.lastShopGiftID] = [values[0], bool(values[2]), int(values[3])]
-                needUpdate = True
 
-        messages = lastReceivedMessages.split("/")
-        for message in messages:
+        for message in self.client.shopMessages.split("/"):
             if not message == "":
-                values = binascii.unhexlify(message).split("|", 4)
-                self.client.sendPacket(Identifiers.send.Shop_Gift_Message, ByteArray().writeShort(0).writeShort(0).writeUTF(values[0]).writeBoolean(bool(values[1])).writeShort(int(values[2])).writeUTF(values[4]).writeUTF(values[3]).writeBoolean(True).toByteArray())
-                needUpdate = True
+                values = binascii.unhexlify(message.encode()).decode().split("|", 4)
+                self.client.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(0).writeUTF(values[0]).writeUTF(values[1]).writeBoolean(bool(values[2])).writeInt(int(values[3])).writeUTF(values[4]).writeBoolean(True).toByteArray())
 
-        if needUpdate:
-            self.Cursor.execute("update Users set selfs = '', Messages = '' where Username = %s", [self.client.playerName])
+        self.client.shopGifts = ""
+        self.client.shopMessages = ""
+        
+    def buyFullLook(self, visuID):
+        p = ByteArray()
+        shopItems = [] if self.client.shopItems == "" else self.client.shopItems.split(",")
+        look = self.server.shopOutfitsCheck[visuID][0].split(";")
+        look[0] = int(look[0])
+        lengthCloth = len(self.client.clothes)
+        buyCloth = 5 if (lengthCloth == 0) else (50 if lengthCloth == 1 else 100)
+
+        self.client.visuItems = {-1: {"ID": -1, "Buy": buyCloth, "Bonus": True, "Customizable": False, "HasCustom": False, "CustomBuy": 0, "Custom": "", "CustomBonus": False}, 22: {"ID": self.client.getFullItemID(22, look[0]), "Buy": self.client.getItemInfo(22, look[0])[6], "Bonus": False, "Customizable": False, "HasCustom": False, "CustomBuy": 0, "Custom": "", "CustomBonus": False}}
+
+        count = 0
+        for visual in look[1].split(","):
+            if not visual == "0":
+                item, customID = visual.split("_", 1) if "_" in visual else [visual, ""]
+                item = int(item)
+                itemID = self.client.getFullItemID(count, item)
+                itemInfo = self.client.getItemInfo(count, item)
+                self.client.visuItems[count] = {"ID": itemID, "Buy": itemInfo[6], "Bonus": False, "Customizable": bool(itemInfo[2]), "HasCustom": customID != "", "CustomBuy": itemInfo[7], "Custom": customID, "CustomBonus": False}
+                if self.client.Shop.checkInShop(self.client.visuItems[count]["ID"]):
+                    self.client.visuItems[count]["Buy"] -= itemInfo[6]
+                if len(self.client.custom) == 1:
+                    if itemID in self.client.custom:
+                        self.client.visuItems[count]["HasCustom"] = True
+                    else:
+                        self.client.visuItems[count]["HasCustom"] = False
+                else:
+                    if str(itemID) in self.client.custom:
+                        self.client.visuItems[count]["HasCustom"] = True
+                    else:
+                        self.client.visuItems[count]["HasCustom"] = False
+            count += 1
+        hasVisu = map(lambda y: 0 if y in shopItems else 1, map(lambda x: x["ID"], self.client.visuItems.values()))
+        visuLength = reduce(lambda x, y: x + y, hasVisu)
+        allPriceBefore = 0
+        allPriceAfter = 0
+        promotion = float((100 - int(self.server.shopOutfitsCheck[visuID][2]))) / 100
+
+        p.writeShort(int(visuID))
+        p.writeByte(0)
+        p.writeUTF(self.server.shopOutfitsCheck[visuID][0])
+
+        p.writeByte(visuLength)
+
+        for category in self.client.visuItems.keys():
+            if len(self.client.visuItems.keys()) == category:
+                category = 22
+            itemID = self.client.getSimpleItemID(category, self.client.visuItems[category]["ID"])
+
+            buy = [self.client.visuItems[category]["Buy"], int(self.client.visuItems[category]["Buy"] * promotion)]
+            customBuy = [self.client.visuItems[category]["CustomBuy"], int(self.client.visuItems[category]["CustomBuy"] * promotion)]
+
+            p.writeInt(self.client.visuItems[category]["ID"])
+            p.writeByte(2 if self.client.visuItems[category]["Bonus"] else (1 if not self.client.Shop.checkInShop(self.client.visuItems[category]["ID"]) else 0))
+            p.writeShort(buy[0])
+            p.writeShort(buy[1])
+            p.writeByte(3 if not self.client.visuItems[category]["Customizable"] else (2 if self.client.visuItems[category]["CustomBonus"] else (1 if self.client.visuItems[category]["HasCustom"] == False else 0)))
+            p.writeShort(customBuy[0])
+            p.writeShort(customBuy[1])
+            
+            allPriceBefore += buy[0] + customBuy[0]
+            allPriceAfter += (0 if (self.client.visuItems[category]["Bonus"]) else (0 if self.client.Shop.checkInShop(itemID) else buy[1])) + (0 if (not self.client.visuItems[category]["Customizable"]) else (0 if self.client.visuItems[category]["CustomBonus"] else (0 if self.client.visuItems[category]["HasCustom"] else (customBuy[1]))))
+
+        p.writeShort(allPriceBefore)
+        p.writeShort(allPriceAfter)
+        self.client.priceDoneVisu = allPriceAfter
+        self.client.sendPacket(Identifiers.send.Buy_Full_Look, p.toByteArray())
+        
+    def buyFullLookConfirm(self, visuID, lookBuy):
+        look = self.server.shopOutfitsCheck[str(visuID)][0].split(";")
+        look[0] = int(look[0])
+        count = 0
+        if self.client.shopFraises >= self.client.priceDoneVisu:
+            for visual in look[1].split(","):
+                if not visual == "0":
+                    item, customID = visual.split("_", 1) if "_" in visual else [visual, ""]
+                    item = int(item)
+                    itemID = self.client.getFullItemID(count, item)
+                    itemInfo = self.client.getItemInfo(count, item)
+                    if len(self.client.shopItems) == 1:
+                        if not self.checkInShop(itemID):
+                            self.client.shopItems += str(itemID)+"_" if self.client.shopItems == "" else "," + str(itemID)+"_"
+                            if not itemID in self.client.custom:
+                                self.client.custom.append(itemID)
+                            else:
+                                if not str(itemID) in self.client.custom:
+                                    self.client.custom.append(str(itemID))
+                    else:
+                        if not self.checkInShop(str(itemID)):
+                            self.client.shopItems += str(itemID)+"_" if self.client.shopItems == "" else "," + str(itemID)+"_"
+                            if not itemID in self.client.custom:
+                                self.client.custom.append(itemID)
+                            else:
+                                if not str(itemID) in self.client.custom:
+                                    self.client.custom.append(str(itemID))
+                count += 1
+                
+            self.client.clothes.append("%02d/%s/%s/%s" %(len(self.client.clothes), lookBuy, "78583a", "fade55" if self.client.shamanSaves >= 1000 else "95d9d6"))
+            furID = self.client.getFullItemID(22, look[0])
+            self.client.shopItems += str(furID) if self.client.shopItems == "" else "," + str(furID)
+            self.client.shopFraises -= self.client.priceDoneVisu
+        self.sendShopList(False)
+        
+    def sendPromotions(self):
+        for promotion in self.server.shopPromotions:
+            self.client.sendPacket(Identifiers.send.Promotion, ByteArray().writeBoolean(True).writeBoolean(True).writeInt(promotion[0] * (10000 if promotion[1] > 99 else 100) + promotion[1] + (10000 if promotion[1] > 99 else 0)).writeBoolean(True).writeInt(promotion[3]).writeByte(promotion[2]).toByteArray())
+
+        if len(self.server.shopPromotions) > 0:
+            promotion = self.server.shopPromotions[0]
+            item = promotion[0] * (10000 if promotion[1] > 99 else 100) + promotion[1] + (10000 if promotion[1] > 99 else 0)
+            self.client.sendPacket(Identifiers.send.Promotion_Popup, ByteArray().writeInt(promotion[0]).writeInt(promotion[1]).writeInt(promotion[2]).writeShort(self.server.shopBadges.get(item, 0)).toByteArray())
+            
+
+

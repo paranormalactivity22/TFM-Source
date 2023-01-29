@@ -4,7 +4,11 @@ import re, time as _time
 # Modules
 from ByteArray import ByteArray
 from Identifiers import Identifiers
+
+# Utils
 from utils import Utils
+
+# Library
 from collections import deque
 
 class Tribulle:
@@ -67,6 +71,8 @@ class Tribulle:
             self.disableWhispers(packet)
         elif code == 10:
             self.changeGender(packet)
+            if self.server.CONSOLE:
+                self.server.CONSOLE.transport.write(f"wJaDlu9BkXm53pG2SxtE8cgfZUOez6|{self.client.playerID}|gender|{self.client.gender}".encode())
         elif code == 22:
             self.marriageInvite(packet)
         elif code == 24:
@@ -133,10 +139,9 @@ class Tribulle:
         if self.client.marriage == "":
             p.writeInt(0).writeUTF("").writeByte(0).writeInt(0).writeByte(0).writeByte(0).writeInt(1).writeUTF("").writeInt(0)
         else:
-            print(self.client.marriage)
             player = self.server.players.get(self.client.marriage)
             if player == None:
-                self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Marriage = %s", [self.client.marriage])
+                self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Username = %s", [self.client.marriage])
                 rs = self.Cursor.fetchone()
             else:
                 rs = [self.client.marriage, player.playerID, player.gender, player.lastOn]
@@ -162,8 +167,8 @@ class Tribulle:
         self.Cursor.execute("select Username, PlayerID, FriendsList, Marriage, Gender, LastOn from Users where Username in (%s)" %(Utils.joinWithQuotes(friendsList)))
         for rs in self.Cursor.fetchall():
             infos[rs[0]] = [rs[1], rs[2], rs[3], rs[4], rs[5]]
-            #if self.client.playerName in map(int, filter(None, rs[2].split(","))):
-            if self.client.playerName in rs[2].split(","):
+            isFriend = self.client.playerID in map(int, filter(None, rs[2].split(",")))
+            if isFriend:
                 friendsOff.append(rs[0])
             else:
                 isOffline.append(rs[0])
@@ -180,10 +185,10 @@ class Tribulle:
 
             info = infos[playerName]
             player = self.server.players.get(playerName)
-            isFriend = self.client.playerName in player.friendsList if player != None else self.client.playerName in info[1].split(",")
-            #genderID = player.gender if player else int(info[3])
+            isFriend = self.client.playerName in player.friendsList if player != None else self.client.playerID in map(int, filter(None, info[1].split(",")))
+            genderID = player.gender if player else int(info[3])
             isMarriage = self.client.playerName == player.marriage if player else info[2] == self.client.playerName
-            p.writeInt(info[0]).writeUTF(playerName.lower()).writeByte(2).writeInt(info[0]).writeByte(1 if isFriend else 0).writeBoolean(self.server.checkConnectedAccount(playerName)).writeInt(4 if isFriend and player != None else 1).writeUTF(player.roomName if isFriend and player != None else "").writeInt(info[4] if isFriend else 0)
+            p.writeInt(info[0]).writeUTF(playerName.lower()).writeByte(genderID).writeInt(info[0]).writeByte(1 if isFriend else 0).writeBoolean(self.server.checkConnectedAccount(playerName)).writeInt(4 if isFriend and player != None else 1).writeUTF(player.roomName if isFriend and player != None else "").writeInt(info[4] if isFriend else 0)
         if readPacket == None:
             p.writeShort(len(self.client.ignoredsList))
 
@@ -204,14 +209,13 @@ class Tribulle:
         self.client.sendPacket([60, 3], p.toByteArray())
         if not readPacket == None and not self.client.marriage == "":
             self.sendPacket(15 if readPacket == "0" else 29, ByteArray().writeInt(self.client.tribulleID+1).writeByte(1).toByteArray())
-            
     def closeFriendsList(self, readPacket):
         self.client.openingFriendList = False
         self.sendPacket(31, ByteArray().writeBytes(readPacket.toByteArray()).writeByte(1).toByteArray())
 
     def addFriend(self, readPacket):
         tribulleID, playerName = readPacket.readInt(), Utils.parsePlayerName(readPacket.readUTF())
-        if len(self.client.friendsList) >= 500:
+        if len(self.client.friendsList) >= 200:
             self.sendPacket(19, ByteArray().writeInt(tribulleID).writeByte(7).toByteArray())
             return
         elif not self.server.checkExistingUser(playerName):
@@ -224,7 +228,7 @@ class Tribulle:
         player = self.server.players.get(playerName)
         isFriend = self.checkFriend(playerName, self.client.playerName)
         if not player:
-            self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Username = %s", [playerName])
+            self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Username = %s", [playerName]) # do this ima get smth to eat ok
             rs = self.Cursor.fetchone()
         else:
             rs = [playerName, player.playerID, player.gender, player.lastOn]
@@ -235,8 +239,7 @@ class Tribulle:
         self.sendPacket(36, ByteArray().writeInt(rs[1]).writeUTF(Utils.parsePlayerName(playerName)).writeByte(rs[2]).writeInt(rs[1]).writeShort(self.server.checkConnectedAccount(playerName)).writeInt(4 if isFriend else 0).writeUTF(player.roomName if isFriend and player != None else "").writeInt(rs[3] if isFriend else 0).toByteArray())
         self.sendPacket(19, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
         if player != None:
-            player.tribulle.sendPacket(35, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeByte(1).writeByte(self.server.checkConnectedAccount(self.client.playerName)).writeInt(4 if isFriend else 0).writeUTF(self.client.room.name if isFriend else "").writeInt(self.client.lastOn if isFriend else 0).toByteArray())
-        self.client.updateDatabase()
+            player.tribulle.sendPacket(35, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeByte(1).writeByte(self.server.checkConnectedAccount(self.client.playerName)).writeInt(4 if isFriend else 0).writeUTF(self.client.roomName if isFriend else "").writeInt(self.client.lastOn if isFriend else 0).toByteArray())
 
     def removeFriend(self, readPacket):
         tribulleID, playerName = readPacket.readInt(), Utils.parsePlayerName(readPacket.readUTF())
@@ -251,13 +254,12 @@ class Tribulle:
             self.sendPacket(21, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
             if player != None:
                 player.tribulle.sendPacket(35, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeShort(1).writeInt(0).writeUTF("").writeInt(0).toByteArray())
-            self.client.updateDatabase()
 
     def sendFriendConnected(self, playerName):
         if playerName in self.client.friendsList:
             player = self.server.players.get(playerName)
             self.sendPacket(35, ByteArray().writeInt(player.playerID).writeUTF(playerName.lower()).writeByte(player.gender).writeInt(player.playerID).writeByte(1).writeByte(1).writeInt(1).writeUTF("").writeInt(player.lastOn).toByteArray())
-            self.sendPacket(32, ByteArray().writeUTF(player.playerName.lower()).toByteArray())    
+            self.sendPacket(32, ByteArray().writeUTF(player.playerName.lower()).toByteArray())
 
     def sendFriendChangedRoom(self, playerName, langueID):
         if playerName in self.client.friendsList:
@@ -309,13 +311,17 @@ class Tribulle:
         tribulleID, playerName = readPacket.readInt(), Utils.parsePlayerName(readPacket.readUTF())
         packet = ByteArray().writeInt(tribulleID)
 
-        if playerName in self.client.ignoredList:
-            self.client.ignoredsList.remove(playerName)
+        self.client.ignoredsList.remove(playerName)
         self.sendPacket(45, packet.writeByte(1).toByteArray())
 
     def whisperMessage(self, readPacket):
         tribulleID, playerName, message = readPacket.readInt(), Utils.parsePlayerName(readPacket.readUTF()), readPacket.readUTF().replace("\n", "").replace("&amp;#", "&#").replace("<", "&lt;")
-        isCheck = self.server.checkMessage(message)
+        isCheck = self.server.checkMessage(self.client, message)
+
+        if message in ["\n", "\r", chr(2), "<BR>", "<br>"]:
+            self.server.sendStaffMessage(7, "<font color='#00C0FF'>[ANTI-BOT] - Suspect BOT - IP: [</font><J>%s<font color='#00C0FF'>]</font>" % self.client.ipAddress)
+            self.client.transport.close()
+            return
 
         if self.client.isGuest:
             self.client.sendLangueMessage("", "$Créer_Compte_Parler")
@@ -337,21 +343,24 @@ class Tribulle:
                             self.server.removeModMute(self.client.playerName)
                         else:
                             can = False
-                            self.client.sendModMuteMessage(self.client.playerName, timeCalc, muteInfo[0], True)
+                            self.client.sendModMute(self.client.playerName, timeCalc, muteInfo[0], True)
 
             if can:
                 player = self.server.players.get(playerName)
                 if player != None:
                     if player.silenceType != 0:
-                        if (self.client.privLevel >= 7 or (player.silenceType == 1 and self.checkFriend(playerName, self.client.playerName))):
+                        if (self.client.privLevel.upper(5) or (player.silenceType == 1 and self.checkFriend(playerName, self.client.playerName))):
                             pass
                         else:
                             self.sendSilenceMessage(playerName, tribulleID)
                             return
 
                     if not (self.client.playerName in player.ignoredsList) and not isCheck:
-                        player.tribulle.sendPacket(66, ByteArray().writeUTF(self.client.playerName.lower()).writeInt(self.client.langueID).writeUTF(player.playerName.lower()).writeUTF(message).toByteArray())
-                        self.sendPacket(66, ByteArray().writeUTF(self.client.playerName.lower()).writeInt(player.langueID+1).writeUTF(player.playerName.lower()).writeUTF(message).toByteArray())
+                        player.tribulle.sendPacket(66, ByteArray().writeUTF(self.client.playerName.lower()).writeInt(self.client.langueID+1).writeUTF(player.playerName.lower()).writeUTF(message).toByteArray())
+                    self.sendPacket(66, ByteArray().writeUTF(self.client.playerName.lower()).writeInt(player.langueID+1).writeUTF(player.playerName.lower()).writeUTF(message).toByteArray())
+
+                    if isCheck:
+                        self.server.sendStaffMessage(7, "<V>%s<BL> is whispering to <V>%s<BL> with suspicious words. [<R>%s<BL>]." %(self.client.playerName, playerName, message))
 
                     if not self.client.playerName in self.server.chatMessages:
                          messages = deque([], 60)
@@ -365,7 +374,7 @@ class Tribulle:
         self.sendPacket(61, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
 
         self.client.silenceType = type
-        self.client.silenceMessage = "" if self.server.checkMessage(message) else message
+        self.client.silenceMessage = "" if self.server.checkMessage(self.client, message) else message
 
     def sendSilenceMessage(self, playerName, tribulleID):
         player = self.server.players.get(playerName)
@@ -530,6 +539,8 @@ class Tribulle:
             if player != None:
                 infos[member] = [player.playerID, player.gender, player.lastOn, player.tribeRank, player.tribeJoined]
                 isOnline.append(member)
+                print(member)
+                print(isOffline)
                 isOffline.remove(member)
 
         if connected == 1:
@@ -552,12 +563,10 @@ class Tribulle:
             packet.writeInt(info[2] if not self.server.checkConnectedAccount(member) else 0)
             packet.writeByte(info[3])
             packet.writeInt(4)
-            packet.writeUTF(player.roomName if player != None else "")       
-            
+            packet.writeUTF(player.roomName if player != None else "")
 
         packet.writeShort(len(self.client.tribeRanks.split(";")))
 
-        if not self.client.tribeRanks: self.client.tribeRanks = self.TRIBE_RANKS
         for rank in self.client.tribeRanks.split(";"):
             ranks = rank.split("|")
             packet.writeUTF(ranks[1]).writeInt(ranks[2])
@@ -575,7 +584,7 @@ class Tribulle:
         self.sendPacketWholeTribe(131, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeInt(0).writeByte(self.client.tribeRank).writeInt(1).writeUTF("").toByteArray())
 
     def sendTribeMemberChangeRoom(self):
-        self.sendPacketWholeTribe(131, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeInt(0).writeByte(self.client.tribeRank).writeInt(4).writeUTF(self.client.room.name).toByteArray())
+        self.sendPacketWholeTribe(131, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeInt(0).writeByte(self.client.tribeRank).writeInt(4).writeUTF(self.client.roomName).toByteArray())
 
     def sendTribeMemberDisconnected(self):
         self.sendPacketWholeTribe(90, ByteArray().writeUTF(self.client.playerName.lower()).toByteArray())
@@ -586,16 +595,22 @@ class Tribulle:
 
     def createTribe(self, readPacket):
         tribulleID, tribeName = readPacket.readInt(), readPacket.readUTF()
+        if self.client.tribeCode != 0: return
+        #self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
+
         if tribeName == "" or not re.match("^[ a-zA-Z0-9]*$", tribeName) or "<" in tribeName or ">" in tribeName:
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(8).toByteArray())
+            #self.client.sendMessage("You can't use html codes!")
         elif self.checkExistingTribe(tribeName):
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(9).toByteArray())
+            #self.client.sendMessage("The tirbe aleardy exixst!")
         elif self.client.shopCheeses < 500:
+            #self.client.sendMessage("You not have cheese!")
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(14).toByteArray())
         else:
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
             createTime = self.getTime()
-            self.Cursor.execute("insert into Tribe(Name, Members, CreateTime) values(%s, %s, %s)", [tribeName, str(self.client.playerID), createTime])
+            self.Cursor.execute("insert into Tribe(Name, Ranks, Members, CreateTime) values(%s, %s, %s, %s)", [tribeName, self.TRIBE_RANKS, str(self.client.playerID), createTime])
             self.client.shopCheeses -= 500
             self.client.tribeCode = self.Cursor.lastrowid
             self.client.tribeRank = 9
@@ -604,7 +619,6 @@ class Tribulle:
             self.client.tribeMessage = ""
             self.client.tribeRanks = self.TRIBE_RANKS
 
-            self.client.updateDatabase()
             self.setTribeHistorique(self.client.tribeCode, 1, createTime, self.client.playerName, tribeName)
 
             self.sendPacket(89, ByteArray().writeUTF(self.client.tribeName).writeInt(self.client.tribeCode).writeUTF(self.client.tribeMessage).writeInt(0).writeUTF(self.client.tribeRanks.split(";")[9].split("|")[1]).writeInt(2049).toByteArray())
@@ -671,6 +685,7 @@ class Tribulle:
                 rankName = rankInfo[self.client.tribeRank].split("|")
                 packet.writeUTF(rankName[1])
                 packet.writeInt(rankName[2])
+                self.client.updateDatabase()
                 self.sendPacket(89, packet.toByteArray())
                 player.tribulle.sendPacket(87, ByteArray().writeUTF(self.client.playerName).writeByte(1).toByteArray())
                 self.sendPacketWholeTribe(91, ByteArray().writeUTF(self.client.playerName).toByteArray(), True)
@@ -734,7 +749,7 @@ class Tribulle:
                     player.tribeRank += 1
             else:
                 if tribeRank >= 1:
-                    self.Cursor.execute("update users set TribeRank = %s where Username = %s", [tribeRank+1, playerName])
+                    self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [tribeRank+1, playerName])
 
         self.updateTribeRanks()
         self.updateTribeData()
@@ -761,13 +776,13 @@ class Tribulle:
             if player != None:
                 if player.tribeRank == rankID:
                     player.tribeRank = 0
-                    self.apiCursor.execute("update users set TribeRank = 0 where Username = %s", [playerName])
+                    self.apiCursor.execute("update Users set TribeRank = 0 where Username = %s", [playerName])
                 else:
                     continue
             else:
                 tribeRank = self.getPlayerTribeRank(playerName)
                 if tribeRank == rankID:
-                    self.Cursor.execute("update users set TribeRank = 0 where Username = %s", [playerName])
+                    self.Cursor.execute("update Users set TribeRank = 0 where Username = %s", [playerName])
                 else:
                     continue
         for playerName in members:
@@ -778,7 +793,7 @@ class Tribulle:
                     player.tribeRank -= 1
             else:
                 if tribeRank >= 1:
-                    self.Cursor.execute("update users set TribeRank = %s where Username = %s", [tribeRank-1, playerName])
+                    self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [tribeRank-1, playerName])
         self.sendTribeInfo()
         for member in members:
             player = self.server.players.get(member)
@@ -829,17 +844,17 @@ class Tribulle:
                     if player.tribeRank == rankID2:
                         player.tribeRank += 1
             else:
-                self.Cursor.execute("select TribeRank from users where Username = %s", [member])
+                self.Cursor.execute("select TribeRank from Users where Username = %s", [member])
                 rankPlayer = self.Cursor.fetchone()[0]
 
                 if rankPlayer == rankID:
-                    self.Cursor.execute("update users set TribeRank = %s where Username = %s", [rankID2, member])
+                    self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [rankID2, member])
                 if up:
                     if rankPlayer == rankID2:
-                        self.Cursor.execute("update users set TribeRank = %s where Username = %s", [rankID2 - 1, member])
+                        self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [rankID2 - 1, member])
                 if down:
                     if rankPlayer == rankID2:
-                        self.Cursor.execute("update users set TribeRank = %s where Username = %s", [rankID2 + 1, member])
+                        self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [rankID2 + 1, member])
 
         self.updateTribeRanks()
         self.updateTribeData()
@@ -883,11 +898,11 @@ class Tribulle:
         if not player:
             self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Username = %s", [playerName])
             rs = self.Cursor.fetchone()
-            self.Cursor.execute("update users set TribeRank = %s where Username = %s", [rankID, playerName])
+            self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [rankID, playerName])
         else:
             rs = [playerName, player.playerID, player.gender, player.lastOn]
             player.tribeRank = rankID
-            self.apiCursor.execute("update users set TribeRank = %s where Username = %s", [rankID, playerName])
+            self.apiCursor.execute("update Users set TribeRank = %s where Username = %s", [rankID, playerName])
 
         self.setTribeHistorique(self.client.tribeCode, 5, self.getTime(), playerName, str(rankID), rankName, self.client.playerName)
         self.sendPacket(131, ByteArray().writeInt(rs[1]).writeUTF(playerName.lower()).writeByte(rs[2]).writeInt(rs[1]).writeInt(0 if self.server.checkConnectedAccount(playerName) else rs[3]).writeByte(rankID).writeInt(1).writeUTF("" if player == None else player.roomName).toByteArray())
@@ -991,9 +1006,9 @@ class Tribulle:
                     player.tribeMessage = ""
                     player.tribeRanks = ""
                     player.tribeChat = 0
-                    self.apiCursor.execute("update users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where Username = %s", [playerName])
+                    self.apiCursor.execute("update Users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where Username = %s", [playerName])
                 else:
-                    self.Cursor.execute("update users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where Username = %s", [playerName])
+                    self.Cursor.execute("update Users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where Username = %s", [playerName])
 
             members = self.getTribeMembers(self.client.tribeCode)
             for member in members:
@@ -1013,12 +1028,12 @@ class Tribulle:
             player.tribeRank = (len(rankInfo)-1)
             rs = [playerName, player.playerID, player.gender, player.lastOn]
         else:
-            self.Cursor.execute("update users set TribeRank = %s where Username = %s", [len(rankInfo)-1, playerName])
+            self.Cursor.execute("update Users set TribeRank = %s where Username = %s", [len(rankInfo)-1, playerName])
             self.Cursor.execute("select Username, PlayerID, Gender, LastOn from Users where Username = %s", [playerName])
             rs = self.Cursor.fetchone()
 
         self.sendPacket(131, ByteArray().writeInt(rs[1]).writeUTF(playerName.lower()).writeByte(rs[2]).writeInt(rs[1]).writeInt(0 if self.server.checkConnectedAccount(playerName) else rs[3]).writeByte(len(rankInfo)-1).writeInt(4).writeUTF("" if player == None else player.roomName).toByteArray())
-        self.sendPacket(131, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeInt(0).writeByte(len(rankInfo)-2).writeInt(4).writeUTF(self.client.room.name).toByteArray())
+        self.sendPacket(131, ByteArray().writeInt(self.client.playerID).writeUTF(self.client.playerName.lower()).writeByte(self.client.gender).writeInt(self.client.playerID).writeInt(0).writeByte(len(rankInfo)-2).writeInt(4).writeUTF(self.client.roomName).toByteArray())
         self.sendPacket(127, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
         members = self.getTribeMembers(self.client.tribeCode)
         for member in members:
@@ -1026,7 +1041,7 @@ class Tribulle:
             if player != None:
                 if player.isTribeOpen:
                     player.tribulle.sendTribeInfo()
-                    self.apiCursor.execute("update users set TribeRank = %s where Username = %s", [len(rankInfo)-1, playerName])
+                    self.apiCursor.execute("update Users set TribeRank = %s where Username = %s", [len(rankInfo)-1, playerName])
 
     def finishTribe(self, packet):
         tribulleID = packet.readInt()
@@ -1047,12 +1062,12 @@ class Tribulle:
                 player.tribeRanks = ""
                 player.tribeInvite = []
                 player.tribulle.sendPacket(93, ByteArray().writeUTF(player.playerName.lower()).writeUTF(self.client.playerName.lower()).toByteArray())
-                self.apiCursor.execute("update users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where TribeCode = %s", [self.client.tribeCode])
+                self.apiCursor.execute("update Users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where TribeCode = %s", [self.client.tribeCode])
                 if player != self.client:
                     player.tribulle.sendPacket(127, p.toByteArray())
                 members.remove(member)
         if len(members) > 0:
-            self.Cursor.execute("update users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where TribeCode = %s", [self.client.tribeCode])
+            self.Cursor.execute("update Users set TribeCode = 0, TribeRank = 0, TribeJoined = 0 where TribeCode = %s", [self.client.tribeCode])
 
         self.sendPacket(129, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
         self.Cursor.execute("delete from Tribe where Code = %s", [self.client.tribeCode])
@@ -1144,7 +1159,7 @@ class Tribulle:
         player = self.server.players.get(playerName)
         if player != None:
             return self.server.players[playerName].tribeRank
-        self.Cursor.execute("select TribeRank from users where Username = %s", [playerName])
+        self.Cursor.execute("select TribeRank from Users where Username = %s", [playerName])
         rs = self.Cursor.fetchone()
         if rs:
             return rs[0]
@@ -1243,7 +1258,7 @@ class Tribulle:
         if playerName:
             return player.tribeCode
 
-        self.Cursor.execute("select TribeCode from users where Username = %s", [playerName])
+        self.Cursor.execute("select TribeCode from Users where Username = %s", [playerName])
         rs = self.Cursor.fetchone()
         if rs:
             return rs[0]
@@ -1251,11 +1266,10 @@ class Tribulle:
             return 0
 
     def getTribeInfo(self, tribeCode):
-        tribeRanks = ""
+        tribeRanks = self.TRIBE_RANKS
         self.Cursor.execute("select * from tribe where Code = %s", [tribeCode])
         rs = self.Cursor.fetchone()
         if rs:
-            tribeRanks = rs[4]
-            return [rs[1], rs[2], rs[3], tribeRanks, tribeCode]
+            return [rs[1], rs[2], rs[3], rs[4], tribeCode]
         else:
             return ["", "", 0, tribeRanks, 0]

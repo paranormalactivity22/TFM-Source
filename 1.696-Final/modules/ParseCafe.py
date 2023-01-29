@@ -9,9 +9,9 @@ class Cafe:
         self.chec = 0
 
     def loadCafeMode(self):
-        if self.client.isGuest:
+        if self.client.isGuest or self.client.cheeseCount < 1000 and self.client.playerTime < 108000:
             self.client.sendLangueMessage("", "<ROSE>$PasAutoriseParlerSurServeur")
-        self.client.sendPacket(Identifiers.send.Open_Cafe, ByteArray().writeBoolean(not self.client.isGuest).toByteArray())
+        self.client.sendPacket(Identifiers.send.Open_Cafe, ByteArray().writeBoolean(not self.client.isGuest and not (self.client.cheeseCount < 1000 and self.client.playerTime < 108000)).toByteArray())
 
         packet = ByteArray().writeBoolean(True).writeBoolean(not self.client.privLevel < 7)
         self.client.CursorCafe.execute("select * from cafetopics order by Date desc limit 0, 20")
@@ -30,7 +30,7 @@ class Cafe:
             if self.client.privLevel >= 7 and rs["Status"] in [0, 2]:
                 packet.writeInt(rs["PostID"]).writeInt(self.server.getPlayerID(rs["Name"])).writeInt(Utils.getSecondsDiff(rs["Date"])).writeUTF(rs["Name"]).writeUTF(rs["Post"]).writeBoolean(str(self.client.playerCode) not in rs["Votes"].split(",")).writeShort(rs["Points"]).writeUTF(rs["ModeratedBY"]).writeByte(rs["Status"])
                 self.chec = rs["PostID"]
-            elif rs["Status"] < 2: # == 1
+            elif rs["Status"] < 2:
                 packet.writeInt(rs["PostID"]).writeInt(self.server.getPlayerID(rs["Name"])).writeInt(Utils.getSecondsDiff(rs["Date"])).writeUTF(rs["Name"]).writeUTF(rs["Post"]).writeBoolean(str(self.client.playerCode) not in rs["Votes"].split(",")).writeShort(rs["Points"]).writeUTF("").writeByte(rs["Status"])
         self.server.lastCafeTopicID = topicID
         self.client.sendPacket(Identifiers.send.Open_Cafe_Topic, packet.toByteArray())
@@ -59,6 +59,7 @@ class Cafe:
     def voteCafePost(self, topicID, postID, mode):
         points = 0
         votes = ""
+        if self.client.isGuest or self.client.cheeseCount < 1000 and self.client.playerTime < 108000: return
 
         self.client.CursorCafe.execute("select Points, Votes from cafeposts where TopicID = ? and PostID = ?", [topicID, postID])
         rs = self.client.CursorCafe.fetchone()
@@ -103,10 +104,10 @@ class Cafe:
         self.openCafeTopic(topicID)
         
     def ReportCafeTopic(self, topicID, postID):
-        pass
+        return
         
     def ViewCafeMessages(self, playerName):
-        pass
+        return
         
     def checkTopic(self, topicID):
         if self.client.privLevel < 7:
@@ -118,13 +119,12 @@ class Cafe:
     def CheckMessageType(self, topicID, status):
         if status:
             self.client.CursorCafe.execute("update cafeposts set Status = 2, ModeratedBY = ? where PostID = ?", [self.client.playerName, self.chec])
-            self.chec = 0
             self.openCafeTopic(topicID)
         else:
             self.client.CursorCafe.execute("update cafeposts set Status = 1, ModeratedBY = ? where PostID = ?", [self.client.playerName, self.chec])
-            self.chec = 0
             self.openCafeTopic(topicID)
+        self.chec = 0
         
     def sendWarnings(self):
         self.client.CursorCafe.execute("select * from cafeposts where status = 2 and name = ? order by postid asc", [self.client.playerName])
-        self.client.sendPacket([144, 11], ByteArray().writeShort(len(self.client.CursorCafe.fetchall())).toByteArray())
+        self.client.sendPacket(Identifiers.send.Send_Cafe_Warnings, ByteArray().writeShort(len(self.client.CursorCafe.fetchall())).toByteArray())

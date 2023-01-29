@@ -48,6 +48,42 @@ class ByteArray:
 
     def writeBoolean(self, value):
         return self.writeByte(1 if bool(value) else 0)
+        
+    def writeEncoded(self, length): # new tfm structure allow u to write unlimited number
+        calc1 = length >> 7
+
+        if calc1 == 0:
+            self.writeByte((length & 127) | 128)
+            self.writeByte(0)
+            return self
+
+        while calc1 != 0:
+            self.writeByte((length & 127) | 128)
+            length = calc1
+            calc1 = calc1 >> 7
+
+        self.writeByte(length & 127)
+        return self
+        
+    def readEncoded(self):
+        local1 = 0
+        local3 = 0
+        local4 = -1
+
+        while True:
+            local2 = self.readByte()
+            local1 = (local1 | ((local2 & 127) << (local3 * 7)))
+            local4 = (local4 << 7)
+            local3+=1
+
+            if not (((local2 & 128) == 128) and (local3 < 5)):
+                break
+
+        if ((local4 >> 1) & local1) != 0:
+            local1 = (local1 | local4)
+
+        return local1
+
 
     def copy(self):
         return ByteArray(self.bytes)

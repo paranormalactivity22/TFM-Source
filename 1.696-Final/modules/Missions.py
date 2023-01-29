@@ -27,37 +27,35 @@ class Missions:
     def activateMissions(self):
     	self.client.sendPacket(Identifiers.send.Activate_Missions, ByteArray().writeBoolean(True).toByteArray())
         
-    def updateMissions(self):
+    def updateMissions(self,t=True):
         self.Cursor.execute("update missions set missions = %s, totalfinished_missions = %s where userid = %s", [json.dumps(self.playerMissions), self.missionsCompleted, self.client.playerID])
 
     def getMissions(self):
         self.Cursor.execute("select missions, totalfinished_missions from missions where userid = %s", [self.client.playerID])
         rs = self.Cursor.fetchone()
-        if rs:
+        if rs and rs[0] != "{}":
             self.playerMissions = json.loads(rs[0])
             self.missionsCompleted = rs[1]
         else:
             i = 0
-            while i < 4:
+            while i < 3:
                 self.randomMission()
                 i += 1
             self.Cursor.execute("insert into missions values (%s, %s, %s)", [self.client.playerID, json.dumps(self.playerMissions), self.missionsCompleted])
 
-    def randomMission(self, isTrue=False): ##########
-        missionID = random.randint(1, 7)
+    def randomMission(self, isTrue=False): 
+        missionID,missionType = random.randint(1, 7), 0
         while str(missionID) in self.playerMissions:
             missionID = random.randint(1, 7)
-
-        missionType = 0
-        reward = random.randint(15, 50)
-        collect = random.randint(10, 65)
 
         if missionID == 2:
             missionType = random.randint(1, 3)
 
-        if missionID == 6:
-            collect = 1
-        missionID = str(missionID)
+        collect = random.choice({10:[20,40,60],21:[50],22:[70],23:[90],30:[50,70,90],40:[20,40,60],50:[20,40,60],60:[1],70:[3,5,7]}[int(f'{missionID}{missionType}')])
+        reward = {20:20,40:35,60:50,50:20,70:35,90:50,3:20,5:35,7:50,1:25}[collect]
+        
+        if missionType != 0: missionID = f'{missionID}_{missionType}'
+        else: missionID = str(missionID)
         if isTrue:
             return [missionID, missionType, 0, collect, reward, True]
         else:
@@ -69,23 +67,20 @@ class Missions:
             return self.playerMissions[missionID]
 
     def changeMission(self, missionID):
-        missionID = str(missionID)
         mission = self.randomMission(True)
-
-        while missionID == int(mission[0]):
-            mission = self.randomMission(True)
-            if missionID != int(mission[0]):
-                break
                 
         self.playerMissions[mission[0]] = [mission[0], mission[1], mission[2], mission[3], mission[4], True]
 
+        if int(missionID) == 2:
+            for missionID in ['2_1','2_2','2_3']: 
+                if missionID in self.playerMissions: del self.playerMissions[missionID]
         if missionID in self.playerMissions:
             del self.playerMissions[missionID]
 
         self.canChangeMission = False
         self.sendMissions()
 
-    def upMission(self, missionID):
+    def upMission(self, missionID,missionType=0):
         if missionID in self.playerMissions and not self.client.isGuest:
             mission = self.playerMissions[missionID]
             mission[2] += 1
@@ -96,17 +91,17 @@ class Missions:
         
     def upMissionAD(self):
         if int(self.missionsCompleted) >= 20:
-            self.completeMission(missionID)
+            self.client.sendPacket(Identifiers.send.Complete_Mission, ByteArray().writeByte(237).writeByte(129).writeByte(0).writeShort(self.missionsCompleted).writeShort(20).writeInt(20).writeShort(0).toByteArray())
+            self.client.shopFraises += 20
+            self.missionsCompleted = 0
+            self.updateMissions(True)
         else:
             self.client.sendPacket(Identifiers.send.Complete_Mission, ByteArray().writeByte(237).writeByte(129).writeByte(0).writeShort(self.missionsCompleted).writeShort(20).writeInt(20).writeShort(1).toByteArray())
-            #self.missionsCompleted = 0
 
     def completeMission(self, missionID):
         if missionID in self.playerMissions:
             mission = self.playerMissions[missionID]
             self.client.shopCheeses += mission[4]
-            #else:
-                #self.client.shopFraises += mission[4]
             self.client.sendPacket(Identifiers.send.Complete_Mission, ByteArray().writeShort(missionID).writeByte(0).writeShort(mission[2]).writeShort(mission[3]).writeShort(mission[4]).writeShort(0).toByteArray())
             del self.playerMissions[missionID]
             self.randomMission()
@@ -115,21 +110,17 @@ class Missions:
             self.upMissionAD()
             
     def sendMissions(self):
-        missions = self.playerMissions
+        print(self.playerMissions)
         p = ByteArray()
-        p.writeByte(len(missions))
-        IDOO = 0
-        for id, mission in missions.items():
-            if IDOO == 3:
-                break
-            p.writeShort(mission[0]) # langues -> $QJTFM_% (short)%
+        p.writeByte(len(self.playerMissions) + 1)
+        for id, mission in self.playerMissions.items():
+            p.writeShort(mission[0].split('_')[0]) # langues -> $QJTFM_% (short)%
             p.writeByte(mission[1])
             p.writeShort(mission[2])
             p.writeShort(mission[3])
             p.writeShort(mission[4])
             p.writeShort(0)
             p.writeBoolean(True) #self.client.canChangeMission
-            IDOO +=1
             
         # 4
         p.writeByte(237)

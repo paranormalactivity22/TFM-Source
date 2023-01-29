@@ -245,7 +245,6 @@ class Identifiers:
             Buy_Full_Look_Confirm = 27
             Send_gift = 28
             Gift_result = 29
-            Buy_Visu_Done = 27
 			
         class Modopwet:
             C = 25
@@ -272,7 +271,7 @@ class Identifiers:
             Player_Info2 = 29
             Temps_Client = 30
             Rooms_List = 35
-            Undefined = 40
+            Request_Info = 40
         
         class Transformation:
             C = 27
@@ -288,7 +287,7 @@ class Identifiers:
             Send_gift = 16
             Computer_Info = 17
             Change_Shaman_Color = 18
-            Request_Info = 50
+            Tribulle_API = 50
         
         class Lua:
             C = 29
@@ -329,6 +328,7 @@ class Identifiers:
         
         class Tribulle:
             C = 60
+            Old_Tribulle = 1
             Tribulle = 3
             
         class Transformice:
@@ -355,14 +355,18 @@ class Identifiers:
             Change_Mission = 2
             Report_Cafe_Post = 4
             Send_Warnings = 5
+            Check_Cafe_Message = 6
+            
+            Sonar_System = 8
             Attach_Player = 10
             NotAttach_Player = 11
             Open_Outfits = 12
-            Open_Sales = 16
-            
-            Add_Sale = 18
-            Cafe = 6
+            Add_Outfit = 13
+            Remove_Outfit = 14
             View_Posts = 15
+            Open_Sales = 16
+            Remove_Sale = 17
+            Add_Sale = 18
     
     class send:
         Sync = [4, 3]
@@ -484,9 +488,11 @@ class Identifiers:
         
         Captcha = [26, 20]
         Player_MS = [26, 25]
+        Player_Info = [26, 28]
         Temps_Client = [26, 30]
         Login_Souris = [26, 33]
         Game_Mode = [26, 35]
+        NPC_Shop = [26, 38]
         Tribulle_Token = [26, 41]
         
         Can_Transformation = [27, 10]
@@ -506,6 +512,7 @@ class Identifiers:
         Request_Info = [28, 50]
         Server_Restart = [28, 88]
 
+        # Lua
         Lua_Minigame = [29, 1]
         Bind_Key_Board = [29, 2]
         Bind_Mouse = [29, 3]
@@ -527,7 +534,6 @@ class Identifiers:
         Remove_Joint = [29, 31]
         Show_Color_Picker = [29, 32]
         Lua_Disable = [29, 33]
-        NPC_Shop = [26, 38]
         
         Mulodrome_Result = [30, 4]
         Mulodrome_End = [30, 13]
@@ -552,9 +558,11 @@ class Identifiers:
         Trade_Close = [31, 10]
 
         Bulle = [44, 1]
+        Bulle_ID = [44, 22]
         
+        Old_Tribulle = [60, 1]
         Tribulle = [60, 3]
-        New_Tribulle = [60, 4]
+        Switch_Tribulle = [60, 4]
 
         Invocation = [100, 2]
         Remove_Invocation = [100, 3]
@@ -571,6 +579,8 @@ class Identifiers:
         Change_Title = [100, 72]
         Image_Login = [100, 99]
 
+
+        # new packets
         Player_List = [144, 1]
         Player_Respawn = [144, 2]
         Send_Missions = [144, 3]
@@ -578,13 +588,23 @@ class Identifiers:
         Activate_Missions = [144, 5]
         Player_Get_Cheese = [144, 6]
         SetPositionToAttach = [144, 9]
+        Send_Cafe_Warnings = [144, 11]
+        Browser_Version_Attention = [144, 13]
+        Init_Sonar = [144, 15]
+        Minibox_1 = [144, 17]
         AttachPlayer = [144, 20]
-        
-        setAIEMode = [144, 30]
+        Open_Outfits = [144, 22]
+        Background_color = [144, 25]
+        Open_Sales = [144, 29]
+        setAIEMode = [144, 30] ####
+        PlayerScale = [144, 32]
         NightMode = [144, 33]
         
+        
+        # language
         Set_Language = [176, 5]
         Language_List = [176, 6]
+        Verify_Code = [176, 7]
 
     class old:
         class recv:

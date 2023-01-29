@@ -65,10 +65,14 @@ class Lua:
         for key, value in array.items():
             callback(key, value)
                
-    def sendLuaMessage(self, *args): ##############
+    def sendLuaMessage(self, *args): 
         message = ""
         for x in args:
-            message += (self.globals.tostring(x) if self.globals.type(x) != "userdata" else "userdata") + ("  " if len(args) > 1 else "")
+            temp = (self.globals.tostring(x) if self.globals.type(x) != "userdata" else "userdata") + ("  " if len(args) > 1 else "")
+            if "table" in temp:
+                message += str(dict(x))
+            else:
+                message += temp
         if message and self.owner:
             self.owner.sendLuaMessage(message)
 
@@ -81,7 +85,7 @@ class Lua:
 
             self.server.loop.call_later(0.5, self.EventLoop)
 
-    def SetupRuntimeGlobals(self): ##############
+    def SetupRuntimeGlobals(self): 
         if self.runtime is None: 
             return
         self.globals = self.runtime.globals()
@@ -91,6 +95,10 @@ class Lua:
         self.globals['module'] = None
         self.globals['require'] = None
         self.globals['loadfile'] = None
+        self.globals['rawlen'] = lambda x: len(dict(x))
+        self.globals['rawequal'] = lambda x,y: x == y if type(x) in [str,int,float] else dict(x) == dict(y)
+        self.globals['rawget'] = lambda x,y: x[y]
+        #self.globals['rawset'] = lambda x,y,z: x[y] = z
         self.globals['table']['foreach'] = self.tableForeach
 
         self.globals['os']['exit'] = None
@@ -103,6 +111,8 @@ class Lua:
         #self.globals['string']['rep'] = lambda t, x: str(t * int(x))
         self.globals['print'] = self.sendLuaMessage
 
+
+        
         self.globals['math']['abs'] = abs
         self.globals['math']['acos'] = math.acos
         self.globals['math']['asin'] = math.asin
@@ -149,6 +159,7 @@ class Lua:
         self.globals['ui']['addLog'] = self.addLog
         self.globals['ui']['addPopup'] = self.room.addPopup
         self.globals['ui']['addTextArea'] = self.room.addTextArea
+        self.globals['ui']['setBackgroundColor'] = self.setBackgroundColor
         self.globals['ui']['removeTextArea'] = self.room.removeTextArea
         self.globals['ui']['setMapName'] = self.setMapName
         self.globals['ui']['setShamanName'] = self.setShamanName
@@ -170,7 +181,7 @@ class Lua:
         self.globals['tfm']['exec']['addBonus'] = self.addBonus
         self.globals['tfm']['exec']['addConjuration'] = self.addConjuration
         self.globals['tfm']['exec']['addImage'] = self.addImage
-        #self.globals['tfm']['exec']['addJoint'] = self.addJoint
+        self.globals['tfm']['exec']['addJoint'] = self.addJoint
         self.globals['tfm']['exec']['addNPC'] = self.room.spawnNPC
         self.globals['tfm']['exec']['addPhysicObject'] = self.room.addPhysicObject
         self.globals['tfm']['exec']['addShamanObject'] = self.addShamanObject
@@ -184,7 +195,10 @@ class Lua:
         self.globals['tfm']['exec']['disableAutoScore'] = self.disableAutoScore
         self.globals['tfm']['exec']['disableAutoShaman'] = self.disableAutoShaman
         self.globals['tfm']['exec']['disableAutoTimeLeft'] = self.disableAutoTimeLeft
+        self.globals['tfm']['exec']['disableDebugCommand'] = self.disableDebugCommand
+        self.globals['tfm']['exec']['disableMinimalistMode'] = self.disableMinimalistMode
         self.globals['tfm']['exec']['disableMortCommand'] = self.disableMortCommand
+        self.globals['tfm']['exec']['disableWatchCommand'] = self.disableWatchCommand
         self.globals['tfm']['exec']['disablePhysicalConsumables'] = self.disablePhysicalConsumables
         self.globals['tfm']['exec']['displayParticle'] = self.displayParticle
         self.globals['tfm']['exec']['explosion'] = self.explosion
@@ -199,19 +213,21 @@ class Lua:
         self.globals['tfm']['exec']['lowerSyncDelay'] = self.lowerSyncDelay
         self.globals['tfm']['exec']['moveCheese'] = self.moveCheese
         self.globals['tfm']['exec']['moveObject'] = self.moveObject
+        self.globals['tfm']['exec']['movePhysicObject'] = self.moveObject
         self.globals['tfm']['exec']['movePlayer'] = self.room.movePlayer
         self.globals['tfm']['exec']['newGame'] = self.newGame
         self.globals['tfm']['exec']['playEmote'] = self.playEmote
         self.globals['tfm']['exec']['playerVictory'] = self.playerVictory
         self.globals['tfm']['exec']['removeBonus'] = self.removeBonus
         self.globals['tfm']['exec']['removeCheese'] = self.removeCheese
-        #self.globals['tfm']['exec']['removeImage'] = self.removeImage
+        self.globals['tfm']['exec']['removeImage'] = self.removeImage
         self.globals['tfm']['exec']['removeJoint'] = self.removeJoint
         self.globals['tfm']['exec']['removeObject'] = self.room.removeObject
         self.globals['tfm']['exec']['removePhysicObject'] = self.RemovePhysicObject
         self.globals['tfm']['exec']['respawnPlayer'] = self.respawnPlayer
         self.globals['tfm']['exec']['setAutoMapFlipMode'] = self.setAutoMapFlipMode
         self.globals['tfm']['exec']['setGameTime'] = self.setGameTime
+        self.globals['tfm']['exec']['setPlayerGravityScale'] = self.setPlayerGravityScale
         self.globals['tfm']['exec']['setPlayerNightMode'] = self.setPlayerNightMode
         self.globals['tfm']['exec']['setNameColor'] = self.room.setNameColor
         self.globals['tfm']['exec']['setPlayerScore'] = self.setPlayerScore
@@ -504,6 +520,9 @@ class Lua:
                 if player != None:
                     player.sendLogMessage(text)
 
+    def setBackgroundColor(self, color="#6A7495"):
+        self.client.sendPacket(Identifiers.send.Background_color, ByteArray().writeUTF(color).toByteArray())
+
     def setMapName(self, message=""):
         self.room.sendAll(Identifiers.send.Set_Map_Name, ByteArray().writeUTF(str(message)).toByteArray())
         
@@ -547,6 +566,42 @@ class Lua:
             player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
             if player != None:
                 player.sendPacket(Identifiers.send.Add_Image, packet.toByteArray())
+
+    def addJoint(self, id=0, ground1=0, ground2=0, jointDefinition={}):
+        p = ByteArray()
+        p.writeShort(id)
+        p.writeShort(ground1)
+        p.writeShort(ground2)
+        jointDefinition=dict(jointDefinition)
+        p.writeByte(jointDefinition.get('type',0))
+        for name in ['point1','point2','point3','point4']:
+            p.writeBoolean(bool(jointDefinition.get(name,False)))
+            try:
+                p.writeShort(int(jointDefinition[name].replace(' ','').split(',')[0]))
+                p.writeShort(int(jointDefinition[name].replace(' ','').split(',')[1]))
+            except:
+                p.writeShort(0)
+                p.writeShort(0)
+        p.writeShort(jointDefinition.get('frequency',0) * 100)
+        p.writeShort(jointDefinition.get('damping',0) * 100)
+        p.writeBoolean(False if [i in jointDefinition for i in ['line','color','alpha','foreground']] == [False, False, False, False] else True)
+        p.writeShort(jointDefinition.get('line',0))
+        p.writeInt(int(jointDefinition.get('color',0)))
+        p.writeShort(jointDefinition.get('alpha',1) * 100)
+        p.writeBoolean(jointDefinition.get('foreground',False))
+        try:
+            p.writeShort(int(jointDefinition['axis'].replace(' ','').split(',')[0]))
+            p.writeShort(int(jointDefinition['axis'].replace(' ','').split(',')[1]))
+        except:
+            p.writeShort(0)
+            p.writeShort(0)
+        p.writeBoolean(bool(jointDefinition.get('angle',False)))
+        p.writeShort(jointDefinition.get('angle',0))
+        for name in ['limit1','limit2','forceMotor','speedMotor']:
+            p.writeBoolean(bool(jointDefinition.get(name,False)))
+            p.writeShort(jointDefinition.get(name,0) * 100)
+        p.writeShort(jointDefinition.get('ratio',1) * 100)
+        self.room.sendAll(Identifiers.send.Add_Joint, p.toByteArray())
 
     def addShamanObject(self, type=0, x=0, y=0, angle=0, vx=0, vy=0, ghost=False, options={}):
         self.LastRoomObjectID += 1
@@ -615,9 +670,21 @@ class Lua:
     def disableAutoTimeLeft(self, status=True):
         self.room.never20secTimer = status
     
+    def disableDebugCommand(self, status=True):
+        self.room.disableDebugCommand = status
+        self.room.sendAll(Identifiers.send.Lua_Disable, ByteArray().writeBoolean(self.room.disableWatchCommand).writeBoolean(self.room.disableDebugCommand).writeBoolean(self.room.disableMinimalistMode).toByteArray())
+    
+    def disableMinimalistMode(self, status=True):
+        self.room.disableMinimalistMode = status
+        self.room.sendAll(Identifiers.send.Lua_Disable, ByteArray().writeBoolean(self.room.disableWatchCommand).writeBoolean(self.room.disableDebugCommand).writeBoolean(self.room.disableMinimalistMode).toByteArray())
+    
     def disableMortCommand(self, status=True):
         self.room.disableMortCommand = status
         
+    def disableWatchCommand(self, status=True):
+        self.room.disableWatchCommand = status
+        self.room.sendAll(Identifiers.send.Lua_Disable, ByteArray().writeBoolean(self.room.disableWatchCommand).writeBoolean(self.room.disableDebugCommand).writeBoolean(self.room.disableMinimalistMode).toByteArray())
+    
     def disablePhysicalConsumables(self, status=True):
         self.room.disablePhysicalConsumables = status
     
@@ -753,8 +820,13 @@ class Lua:
             player.hasCheese = False
             player.sendRemoveCheese()
               
-    #def removeImage(self, imageId): #########
-        #self.room.sendAll(Identifiers.send.Add_Image, ByteArray().writeInt(imageId).toByteArray())
+    def removeImage(self, imageId=0, targetPlayer="", visible=False):
+        if targetPlayer == "":
+            self.room.sendAll(Identifiers.send.Remove_Image, ByteArray().writeInt(imageId).writeBoolean(visible).toByteArray())
+        else:
+            player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
+            if player != None:
+                player.sendPacket(Identifiers.send.Remove_Image, ByteArray().writeInt(imageId).writeBoolean(visible).toByteArray())
         
     def removeJoint(self, id):
         self.room.sendAll(Identifiers.send.Remove_Joint, [id])
@@ -767,13 +839,13 @@ class Lua:
         if player != None:
             self.room.respawnSpecific(playerName)
 
-    def setAieMode(self, enable=True, sensibility=1, targetPlayer=""):
+    def setAieMode(self, enabled=True, sensibility=1, targetPlayer=""):
         if targetPlayer == "":
-            self.room.sendAll(Identifiers.send.setAIEMode, ByteArray().writeBoolean(enable).writeInt(sensibility).toByteArray())
+            self.room.sendAll(Identifiers.send.setAIEMode, ByteArray().writeBoolean(enabled).writeEncoded(sensibility * 1000).toByteArray())
         else:
             player = self.room.clients.get(Utils.parsePlayerName(targetPlayer))
             if player != None:
-                player.sendPacket(Identifiers.send.setAIEMode, ByteArray().writeBoolean(enable).writeInt(sensibility).toByteArray())
+                player.sendPacket(Identifiers.send.setAIEMode, ByteArray().writeBoolean(enabled).writeEncoded(sensibility * 1000).toByteArray())
 
     def setAutoMapFlipMode(self, status=False):
         self.room.autoMapFlipMode = status
@@ -790,6 +862,11 @@ class Lua:
 
             self.room.roundTime = iTime
             self.room.changeMapTimers(iTime)
+
+    def setPlayerGravityScale(self, playerName, scale=1, windScale=1):
+        player = self.room.clients.get(Utils.parsePlayerName(playerName))
+        if player != None:
+            self.room.sendAll(Identifiers.send.PlayerScale, ByteArray().writeEncoded(player.playerCode).writeEncoded(scale * 1000).writeEncoded(windScale * 1000).toByteArray())
 
     def setPlayerNightMode(self, enable=True, playerName=""):
         if playerName == "":
@@ -847,7 +924,7 @@ class Lua:
     
     def snow(self, time=60, power=10):
         self.room.startSnow(time, power, not self.room.isSnowing)
-    
+        
     ### Others
     
     def getPermCode(self):
