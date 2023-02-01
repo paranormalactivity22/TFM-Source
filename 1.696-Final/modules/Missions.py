@@ -110,7 +110,6 @@ class Missions:
             self.upMissionAD()
             
     def sendMissions(self):
-        print(self.playerMissions)
         p = ByteArray()
         p.writeByte(len(self.playerMissions) + 1)
         for id, mission in self.playerMissions.items():

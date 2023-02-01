@@ -316,7 +316,7 @@ class Tribulle:
 
     def whisperMessage(self, readPacket):
         tribulleID, playerName, message = readPacket.readInt(), Utils.parsePlayerName(readPacket.readUTF()), readPacket.readUTF().replace("\n", "").replace("&amp;#", "&#").replace("<", "&lt;")
-        isCheck = self.server.checkMessage(self.client, message)
+        isCheck = self.server.checkMessage(message)
 
         if message in ["\n", "\r", chr(2), "<BR>", "<br>"]:
             self.server.sendStaffMessage(7, "<font color='#00C0FF'>[ANTI-BOT] - Suspect BOT - IP: [</font><J>%s<font color='#00C0FF'>]</font>" % self.client.ipAddress)
@@ -349,7 +349,7 @@ class Tribulle:
                 player = self.server.players.get(playerName)
                 if player != None:
                     if player.silenceType != 0:
-                        if (self.client.privLevel.upper(5) or (player.silenceType == 1 and self.checkFriend(playerName, self.client.playerName))):
+                        if (self.client.privLevel >= 7 or (player.silenceType == 1 and self.checkFriend(playerName, self.client.playerName))):
                             pass
                         else:
                             self.sendSilenceMessage(playerName, tribulleID)
@@ -374,7 +374,7 @@ class Tribulle:
         self.sendPacket(61, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
 
         self.client.silenceType = type
-        self.client.silenceMessage = "" if self.server.checkMessage(self.client, message) else message
+        self.client.silenceMessage = "" if self.server.checkMessage(message) else message
 
     def sendSilenceMessage(self, playerName, tribulleID):
         player = self.server.players.get(playerName)
@@ -539,8 +539,6 @@ class Tribulle:
             if player != None:
                 infos[member] = [player.playerID, player.gender, player.lastOn, player.tribeRank, player.tribeJoined]
                 isOnline.append(member)
-                print(member)
-                print(isOffline)
                 isOffline.remove(member)
 
         if connected == 1:

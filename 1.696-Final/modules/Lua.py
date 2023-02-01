@@ -217,6 +217,7 @@ class Lua:
         self.globals['tfm']['exec']['movePlayer'] = self.room.movePlayer
         self.globals['tfm']['exec']['newGame'] = self.newGame
         self.globals['tfm']['exec']['playEmote'] = self.playEmote
+        #self.globals['tfm']['exec']['playSound'] = self.playSound
         self.globals['tfm']['exec']['playerVictory'] = self.playerVictory
         self.globals['tfm']['exec']['removeBonus'] = self.removeBonus
         self.globals['tfm']['exec']['removeCheese'] = self.removeCheese
@@ -225,6 +226,7 @@ class Lua:
         self.globals['tfm']['exec']['removeObject'] = self.room.removeObject
         self.globals['tfm']['exec']['removePhysicObject'] = self.RemovePhysicObject
         self.globals['tfm']['exec']['respawnPlayer'] = self.respawnPlayer
+        self.globals['tfm']['exec']['setAieMode'] = self.setAieMode
         self.globals['tfm']['exec']['setAutoMapFlipMode'] = self.setAutoMapFlipMode
         self.globals['tfm']['exec']['setGameTime'] = self.setGameTime
         self.globals['tfm']['exec']['setPlayerGravityScale'] = self.setPlayerGravityScale
@@ -239,8 +241,7 @@ class Lua:
         self.globals['tfm']['exec']['setUIShamanName'] = self.setShamanName
         self.globals['tfm']['exec']['setVampirePlayer'] = self.setVampirePlayer
         self.globals['tfm']['exec']['setWorldGravity'] = self.setWorldGravity
-        
-        self.globals['tfm']['exec']['setAieMode'] = self.setAieMode
+        #self.globals['tfm']['exec']['stopSound'] = self.stopSound
         
         self.globals['tfm']['exec']['snow'] = self.snow
         self.globals['tfm']['get']['misc']['apiVersion'] = "0.28"
@@ -426,7 +427,7 @@ class Lua:
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["shamanMode"] = player.shamanType
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["inHardMode"] = player.shamanType
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["isDead"] = player.isDead
-            self.globals['tfm']['get']['room']['playerList'][player.playerName]["isFacingRight"] = player.isFacingRight
+            self.globals['tfm']['get']['room']['playerList'][player.playerName]["isFacingRight"] = player.isMovingRight
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["isJumping"] = player.isJumping
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["isShaman"] = player.isShaman
             self.globals['tfm']['get']['room']['playerList'][player.playerName]["isVampire"] = player.isVampire
@@ -549,7 +550,7 @@ class Lua:
         self.room.sendAll(Identifiers.old.send.Add_Conjuration, [x, y, duration])
         self.server.loop.call_later(duration / 1000, self.room.sendAll, Identifiers.old.send.Conjuration_Destroy, [int(x), int(y)])
 
-    def addImage(self, imageName, target, xPosition = 0, yPosition = 0, targetPlayer = "", scaleX = 1, scaleY = 1, angle = 0, alpha = 1, AnchorX = 0, AnchorY = 0):
+    def addImage(self, imageName, target, xPosition = 0, yPosition = 0, targetPlayer = "", scaleX = 1, scaleY = 1, angle = 0, alpha = 1, AnchorX = 0, AnchorY = 0, fadeIn=0, fadeOut=0):
         packet = ByteArray()
         self.room.lastImageID += 1
         packet.writeInt(self.room.lastImageID)
@@ -820,7 +821,7 @@ class Lua:
             player.hasCheese = False
             player.sendRemoveCheese()
               
-    def removeImage(self, imageId=0, targetPlayer="", visible=False):
+    def removeImage(self, imageId=0, targetPlayer="", visible=False, fadeIn=0, fadeOut=0):
         if targetPlayer == "":
             self.room.sendAll(Identifiers.send.Remove_Image, ByteArray().writeInt(imageId).writeBoolean(visible).toByteArray())
         else:

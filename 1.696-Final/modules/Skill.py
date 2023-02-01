@@ -133,7 +133,7 @@ class Skills:
                     self.client.playerSkills = {}
                     self.sendShamanSkills(True)
                     self.client.canRedistributeSkills = False
-                    #if self.client.resSkillsTimer != None: self.client.resSkillsTimer.cancel()
+                    if self.client.resSkillsTimer != None: self.client.resSkillsTimer.cancel()
                     self.client.resSkillsTimer = self.server.loop.call_later(600, setattr, self, "canRedistributeSkills", True)
                     self.client.totem = [0, ""]
                 else:

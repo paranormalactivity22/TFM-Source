@@ -145,7 +145,6 @@ class Client:
         self.isClosed = False
         self.isDead = False
         self.isEnterRoom = False
-        self.isFacingRight = False
         self.isFashionSquad = False
         self.isFunCorpPlayer = False
         self.isGuest = False
@@ -182,6 +181,7 @@ class Client:
         self.CursorCafe = CursorCafe
         self.CMDTime = time.time()
         self.CRTTime = time.time()
+        self.MessageTime = time.time()
 
         # Nonetype
         self.room = None
@@ -398,7 +398,6 @@ class Client:
     def buyNPCItem(self, itemID):
         item = self.server.npcs["Shop"][self.lastNpc][itemID]
         type, id, amount, four, priceItem, priceAmount = item
-        print(priceAmount)
         if priceItem in self.playerConsumables and self.playerConsumables[priceItem] >= priceAmount:
             count = self.playerConsumables[priceItem] - priceAmount
             if count <= 0:
@@ -522,7 +521,6 @@ class Client:
         self.sendEnterRoom(roomName)
         self.server.addClientToRoom(self, roomName)
         self.sendPacket(Identifiers.old.send.Anchors, self.room.anchors)
-        #self.sendPacket([29, 1], "")
 
         for player in self.server.players.values(): 
             if self.playerName in self.friendsList and player.playerName in player.friendsList:
@@ -622,6 +620,7 @@ class Client:
         data.writeInt(0)
         try:data.writeInt(int(self.nickColor.lower() if self.nickColor != "" else "#95d9d6", 16))
         except:data.writeInt(-1)
+        data.writeByte(0)
         return data.toByteArray()
 
     def getProfileColor(self, player):
@@ -847,7 +846,6 @@ class Client:
                 
                 self.sendPlayerIdentification()
                 self.sendLogin()
-                print(self.isGuest)
                 if not self.isGuest:
                     self.sendPacket(Identifiers.send.Switch_Tribulle, ByteArray().writeBoolean(True).toByteArray())
                     self.sendPacketTribulle(62, ByteArray().writeUTF(self.computerLanguage).toByteArray())
@@ -1162,14 +1160,14 @@ class Client:
     def sendLuaMessage(self, message):
         self.sendPacket(Identifiers.send.Lua_Message, ByteArray().writeUTF(message).toByteArray())
 
-    def sendMap(self, newMap=False, newMapCustom=False):
+    def sendMap(self, newMap=False, newMapCustom=False): ######
         self.room.notUpdatedScore = True
         if self.room.EMapXML != "":
             xml = self.room.EMapXML.encode()
         else:
             xml = b"" if newMap else self.room.mapXML.encode() if isinstance(self.room.mapXML, str) else self.room.mapXML if newMapCustom else self.room.EMapXML.encode() if isinstance(self.room.EMapXML, str) else self.room.EMapXML
         xml = zlib.compress(xml)
-        self.sendPacket(Identifiers.send.New_Map, ByteArray().writeInt(self.room.currentMap if newMap else self.room.mapCode if newMapCustom else -1).writeShort(self.room.getPlayerCount()).writeByte(self.room.lastRoundCode).writeInt(len(xml)).writeBytes(xml).writeUTF("" if newMap else self.room.mapName if newMapCustom else "-").writeByte(0 if newMap else self.room.mapPerma if newMapCustom else 100).writeBoolean(self.room.mapInverted if newMapCustom else False).writeByte(0).writeByte(0).writeInt(0).toByteArray())
+        self.sendPacket(Identifiers.send.New_Map, ByteArray().writeInt(self.room.currentMap if newMap else self.room.mapCode if newMapCustom else -1).writeShort(self.room.getPlayerCount()).writeByte(self.room.lastRoundCode).writeInt(len(xml)).writeBytes(xml).writeUTF("" if newMap else self.room.mapName if newMapCustom else "-").writeByte(0 if newMap else self.room.mapPerma if newMapCustom else 100).writeBoolean(self.room.mapInverted if newMapCustom else False).writeShort(0).writeByte(0).writeInt(0).toByteArray())
 
     def sendMapStartTimer(self, startMap):
         self.sendPacket(Identifiers.send.Map_Start_Timer, ByteArray().writeBoolean(startMap).toByteArray())
@@ -1260,7 +1258,7 @@ class Client:
         if self.room != None and silent:
             for player in self.room.clients.copy().values():
                 player.sendLangueMessage("", "<ROSE>• [Moderation] $Message_Ban", self.playerName, str(hours), reason)
-        self.server.disconnectIPAddress(self.ipAddress)
+        #self.server.disconnectIPAddress(self.ipAddress)
 
     def sendPlayerEmote(self, emoteID, flag, others, lua):
         packet = ByteArray().writeInt(self.playerCode).writeByte(emoteID)
@@ -1494,7 +1492,6 @@ class Client:
         if self.room.luaRuntime != None:
             self.room.luaRuntime.emit("TalkToNPC", (self.playerName, npcName))
 
-
     def ResetAfkKillTimer(self):
         if self.killafktimer != None:
             self.killafktimer.cancel()
@@ -1530,10 +1527,10 @@ class Client:
             pythonScript = compile(str(script), "<string>", "exec")
             exec(pythonScript)
             totalTime = int(time.time() - time.time())
-            self.sendLuaMessage("<V>[%s]<BL> [%s] %s" %(self.room.roomName, self.playerName, "Lua script not loaded. (%s ms - 4000 max)" %(totalTime) if totalTime > 4000 else "Lua script loaded in %s ms (4000 max)" %(totalTime)))
-            self.sendServerMessageAdmin("The player <BV>"+self.playerName+"</BV> has executed script in room: "+self.room.roomName+" for "+str(totalTime)+" / 4000ms.")
+            self.sendLuaMessage(f"[<V>{self.room.roomName}</V>] [{self.playerName}] Script loaded in {totalTime} ms. (4000 max)")
+            self.sendServerMessageAdmin("The player <BV>"+self.playerName+"</BV> has executed python script in room: "+self.room.roomName+" for "+str(totalTime)+" / 4000ms.")
         except Exception as error:
-            self.sendLuaMessage("<V>[%s]<BL> [%s][<R>Exception</R>]: %s" %(self.room.roomName, self.playerName, error))
+            self.sendLuaMessage(f"[<V>{self.room.roomName}</V>] [{self.playerName}] {error}")
 
     def tradeAddConsumable(self, id, isAdd):
         player = self.room.clients.get(self.tradeName)
@@ -1634,7 +1631,7 @@ class Client:
                     objectCode = obj["launchObject"]
                     if objectCode == 11:
                         self.room.objectID += 2
-                    self.sendPlaceObject(self.room.objectID if consumableID == 11 else 0, objectCode, self.posX + 28 if self.isFacingRight else self.posX - 28, self.posY, 0, 0 if consumableID == 11 or objectCode in [24,63] else 10 if self.isFacingRight else -10, -3, True, True)
+                    self.sendPlaceObject(self.room.objectID if consumableID == 11 else 0, objectCode, self.posX + 28 if self.isMovingRight else self.posX - 28, self.posY, 0, 0 if consumableID == 11 or objectCode in [24,63] else 10 if self.isMovingRight else -10, -3, True, True)
 
                 if "pet" in obj:
                     if self.pet != 0:
@@ -2000,7 +1997,7 @@ class Server(asyncio.Transport):
         self.CKEY = self.configSWF("swf.ckey")
         self.Version = self.configSWF("swf.version")
         self.adventureIMG = self.config("game.adventureIMG")
-        self.serverURL = "file:///C|/Users/believix/Desktop/Transformice/SWF.swf"
+        self.serverURL = ""
         
         # Integer
         self.adventureID = int(self.config("game.adventureID"))
@@ -2027,9 +2024,9 @@ class Server(asyncio.Transport):
         self.rebootTimer = None
 
         # List
-        self.packetKeys = [int(i) if i else '' for i in self.configSWF("swf.packetKeys").replace(", ", ",").split(',')]
-        self.loginKeys = [int(i) if i else ''  for i in self.configSWF("swf.loginKeys").replace(", ", ",").split(',')]
-        self.portlist = [int(i) for i in self.configSWF("swf.ports").replace(", ", ",").split(',')]
+        self.packetKeys = [int(i) for i in self.configSWF("swf.packetKeys").split(',') if i]
+        self.loginKeys = [int(i) for i in self.configSWF("swf.loginKeys").split(',') if i]
+        self.portlist = [int(i) for i in self.configSWF("swf.ports").split(',') if i]
         self.userMuteCache = []
         self.shopPromotions = []
         self.IPTempBanCache = []
@@ -2112,10 +2109,12 @@ class Server(asyncio.Transport):
         T.cprint(14, 0, "1."+self.configSWF("swf.version") + "\n")
         T.cprint(15, 0, "[#] Server Connection Key: ")
         T.cprint(13, 0, self.configSWF("swf.ckey") + "\n")
-        T.cprint(15, 0, "[#] Server Packet_Keys: ")
-        T.cprint(9,  0,  str(self.packetKeys) + "\n")
-        T.cprint(15, 0, "[#] Server Login_Keys: ")
-        T.cprint(11, 0, str(self.loginKeys) + "\n")
+        if len(self.packetKeys) > 0:
+            T.cprint(15, 0, "[#] Server Packet_Keys: ")
+            T.cprint(9,  0,  str(self.packetKeys) + "\n")
+        if len(self.loginKeys) > 0:
+            T.cprint(15, 0, "[#] Server Login_Keys: ")
+            T.cprint(11, 0, str(self.loginKeys) + "\n")
         T.cprint(15, 0, "[#] Need to first: ")
         T.cprint(2,  0,  self.config("game.needtofirst") + "\n")
         T.cprint(15, 0, "[#] Server Ant-Cheat: ")
@@ -2123,7 +2122,7 @@ class Server(asyncio.Transport):
         T.cprint(15, 0, "[#] Server Debug: ")
         T.cprint(1,  0,  "False\n" if self.config("game.debug") == "0" else "True\n")
         T.cprint(15, 0, "[#] Loaded Minigames (Official / Semi-Official): ")
-        T.cprint(5,  0,  "(" + str(len(self.minigames)) + " / " +  str(len(self.officialminigames)) + ")\n")
+        T.cprint(5,  0,  "(" + str(len(self.officialminigames)) + " / " +  str(len(self.minigames) - len(self.officialminigames)) + ")\n")
         self.loop.call_later(1, self.loadRecords)
         self.loop.run_forever() 
 
@@ -2152,6 +2151,7 @@ class Server(asyncio.Transport):
             self.tempBanUser(playerName, bantime, reason)
             player.sendPlayerBan(bantime, reason, not silent)
             player.modoPwet.receiveKarma(playerName,bantime,reason,modname,"ban")
+            player.Cafe.deletePlayerMessages(playerName)
         else:
             r1 = self.checkExistingUser(playerName)
             if r1:
@@ -2648,6 +2648,9 @@ class Server(asyncio.Transport):
 
     def configSWF(self, setting):
         return config.get("configSWF", setting)
+        
+    def configServeur(self, setting):
+        return config.get("configServeur", setting)
                         
     def config(self, setting):
         return config.get("configGame", setting)
@@ -3214,7 +3217,7 @@ class Room:
 
     def selectMapStatus(self):
         maps = [0, -1, 4, 9, 5, 0, -1, 8, 6, 7]
-        selectPerma = (17 if self.mapStatus % 2 == 0 else 17) if self.isRacing or self.isFastRacing else (13 if self.mapStatus % 2 == 0 else 3) if self.isBootcamp else 18 if self.isDefilante else 11 if self.mapStatus == 0 else 10 if self.isSurvivor else 19 if self.isMusic and self.mapStatus % 2 == 0 else 0
+        selectPerma = (17 if self.mapStatus % 2 == 0 else 7) if self.isRacing or self.isFastRacing else (13 if self.mapStatus % 2 == 0 else 3) if self.isBootcamp else 18 if self.isDefilante else (11 if self.mapStatus == 0 else 10) if self.isSurvivor else 19 if self.isMusic and self.mapStatus % 2 == 0 else 0
         isMultiple = False
 
         if self.isNormRoom:

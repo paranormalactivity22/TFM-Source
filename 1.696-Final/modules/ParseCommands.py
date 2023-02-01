@@ -193,15 +193,20 @@ class Commands:
                     for player in self.client.room.clients.copy().values():
                         player.sendPacket(Identifiers.send.Mulodrome_Start, 1 if player.playerName == self.client.playerName else 0)
 
-            elif command in ["x_eneko"]:
-                self.client.enterRoom(self.client.sendLangueMessage("", "$Entrainement") + self.client.playerName)
-
             elif command in ["time", "temps"]:
                 if self.client.privLevel >= 1:
                     self.client.playerTime += abs(Utils.getSecondsDiff(self.client.loginTime))
                     self.client.loginTime = Utils.getTime()
                     temps = map(int, [self.client.playerTime // 86400, self.client.playerTime // 3600 % 24, self.client.playerTime // 60 % 60, self.client.playerTime % 60])
                     self.client.sendLangueMessage("", "$TempsDeJeu", *temps)
+
+            elif command in ["tutorial"]:
+                self.client.enterRoom("\x03[Tutorial] %s" %(self.client.playerName))
+
+            elif command in ["facebook"]:
+                if self.client.privLevel >= 1:
+                    self.client.sendPacket(Identifiers.old.send.Facebook_URL, [""])
+                    #self.client.shopCheeses += 20
 
 # Tribe Commands:
             elif command in ["inv"]:
@@ -284,7 +289,7 @@ class Commands:
                     else:
                         self.client.playerException.Invoke("unknownuser")
             
-            elif command in ["csr"]: #########
+            elif command in ["csr"]:
                 if (self.client.privLevel in [6, 9] or self.client.isMapCrew == True) and self.requireTribePerm(2046):
                     ml = []
                     for room in self.server.rooms.values():
@@ -298,13 +303,10 @@ class Commands:
                         self.client.room.currentSyncName = player.playerName
                         self.client.sendLangueMessage("", "$NouveauSync <V> %s" %(player))
             
-            #elif command in ["playmusic", "musique", "music"]:
-                #if (self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) or self.requireTribePerm(2046):
-                    #if len(args) == 0:
-                        #self.client.room.sendAll(Identifiers.old.send.Music, [])
-                    #else:
-                        #self.client.room.sendAll(Identifiers.old.send.Music, [args[0]])
 
+            elif command in ["playmusic", "musique", "music"]:
+                if (self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) or self.requireTribePerm(2046):
+                    self.client.room.sendAll(Identifiers.old.send.Music, []) if len(args) == 0 else self.client.room.sendAll(Identifiers.old.send.Music, [args[0]])
 
 # Lua and Fashion Squad Commands
             elif command in ["lslua"]:
@@ -373,27 +375,24 @@ class Commands:
 
             elif command in ["roomevent"]:
                 if (self.client.privLevel in [5, 9] or self.client.isFuncorpPlayer == True):
-                    if self.client.room.isFuncorp: 
-                        if self.client.room.isFuncorpRoomName:
-                            self.client.room.isFuncorpRoomName = False
-                            self.client.sendClientMessage('Sucessfull disabled the room color.', 1)
-                        else:
-                            self.client.sendClientMessage('Sucessfull enabled the room color.', 1)
-                            self.client.room.isFuncorpRoomName = True
+                    if self.client.room.isFuncorp:
+                        self.client.room.isFuncorpRoomName = not self.client.room.isFuncorpRoomName
+                        self.client.sendClientMessage('Sucessfull disabled the room color.' if self.client.room.isFuncorpRoomName else 'Sucessfull enabled the room color.', 1)
                     else:
                         self.client.playerException.Invoke("requireFC")
 
             elif command in ["transformation"]: 
                 if(self.client.privLevel in [5, 9] or self.client.room.roomName == "*strm_" + self.client.playerName or self.client.isFuncorpPlayer == True) and self.requireArguments(1, True):
                     if self.client.room.isFuncorp:
-                        if len(args) == 2 and args[0] == "*" and args[1] == "off":
-                            for player in self.client.room.clients.copy().values():
-                                player.sendPacket([27, 10], 0)
-                            self.client.sendClientMessage("All the transformations powers have been removed.", 1)
-                        elif len(args) == 1 and args[0] == "*":
-                            for player in self.client.room.clients.copy().values():
-                                player.sendPacket([27, 10], 1)
-                            self.client.sendClientMessage("Transformations powers given to all players in the room.", 1)
+                        if len(args) == 2 and args[0] == "*":
+                            if args[1] == "off":
+                                for player in self.client.room.clients.copy().values():
+                                    player.sendPacket(Identifiers.send.Can_Transformation, 0)
+                                self.client.sendClientMessage("All the transformations powers have been removed.", 1)
+                            else:
+                                for player in self.client.room.clients.copy().values():
+                                    player.sendPacket(Identifiers.send.Can_Transformation, 1)
+                                self.client.sendClientMessage("Transformations powers given to all players in the room.", 1)
                         else:
                             dump = []
                             for arg in args:
@@ -402,14 +401,14 @@ class Commands:
                                 for x in dump:
                                     player = self.server.players.get(x)
                                     if player != None:
-                                        player.sendPacket([27, 10], 1)
+                                        player.sendPacket(Identifiers.send.Can_Transformation, 1)
                                 res = ", ".join(dump)
                                 self.client.sendClientMessage("Transformations powers given to players: <BV>"+res+"</BV>", 1)
                             else:
                                 for x in dump[:-1]:
                                     player = self.server.players.get(x)
                                     if player != None:
-                                        player.sendPacket([27, 10], 0)
+                                        player.sendPacket(Identifiers.send.Can_Transformation, 0)
                                 dump.pop()
                                 res = ", ".join(dump)
                                 self.client.sendClientMessage("Transformations powers removed to players: <BV>"+res+"</BV>", 1)
@@ -427,7 +426,7 @@ class Commands:
                                 self.client.sendClientMessage("All players now have their regular size.", 1)
                             else:
                                 r1 = int(args[1])
-                                if r1 == 999999999: r1 = 100
+                                if r1 >= 999999999: r1 = 100
                                 for player in self.client.room.clients.copy().values():
                                     self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(r1).writeBoolean(False).toByteArray())
                                 self.client.sendClientMessage("All players now have the same size: <BV>" + str(r1) + "</BV>.", 1)
@@ -618,7 +617,7 @@ class Commands:
                         if rate == "Nan": rate = "0"
                         self.client.sendClientMessage("<BL>"+self.client.room.mapName+" - @"+str(self.client.room.mapCode)+" - "+str(totalVotes)+" - "+rate+"% - P"+str(self.client.room.mapPerma)+".</BL>")
 
-            elif command in ["np", "npp"]:
+            elif command in ["np", "npp"]: ########
                 if (self.client.privLevel >= 5 or self.client.room.roomName == "*strm_" + self.client.playerName.lower() or self.client.isMapCrew == True) or self.client.room.isTribeHouse:
                     if argsCount == 0:
                         self.client.room.mapChange()
@@ -1311,9 +1310,9 @@ class Commands:
                             player.room.removeClient(player)
                             player.transport.close()
 
-            elif command in ["max"]:
-                if self.client.privLevel >= 8:
-                    self.client.sendClientMessage("Maximum Players: <VP>"+str(self.server.MaximumPlayers)+"</VP>.", 1)
+            #elif command in ["max"]:
+                #if self.client.privLevel >= 8:
+                    #self.client.sendClientMessage("Maximum Players: <VP>"+str(self.server.MaximumPlayers)+"</VP>.", 1)
 
             elif command in ["log"]:
                 if self.client.privLevel >= 8:
@@ -1526,8 +1525,8 @@ class Commands:
                     try:
                         self.server.reloadServer()
                         self.client.sendClientMessage("Successfull reloaded all modules.", 1)
-                    except:
-                        self.client.sendClientMessage("Failed reload all modules.", 1)
+                    except Exception as e:
+                        self.client.sendClientMessage(f"Failed reload all modules. Error: {e}", 1)
                         
             elif command in ["changepassword"]:
                 if self.client.playerName in self.owners and self.requireArguments(2):
@@ -1537,8 +1536,8 @@ class Commands:
                     if player != None:
                         salt = b'\xf7\x1a\xa6\xde\x8f\x17v\xa8\x03\x9d2\xb8\xa1V\xb2\xa9>\xddC\x9d\xc5\xdd\xceV\xd3\xb7\xa4\x05J\r\x08\xb0'
                         hashtext = base64.b64encode(hashlib.sha256(hashlib.sha256(password.encode()).hexdigest().encode() + salt).digest()).decode()
-                        player.updateDatabase()
                         self.Cursor.execute(f"UPDATE Users SET Password = '{hashtext}' WHERE Username = '{playerName}'")
+                        player.updateDatabase()
                         player.room.removeClient(player)
                         player.transport.close()
                     else:
@@ -1576,21 +1575,14 @@ class Commands:
                         arg2 = "start"
                     player = self.server.players.get(playerName)
                     if player:
-                        self.client.sendPacket([144,17],ByteArray().writeUTF("Sonar "+args[0]).writeUTF('\n'.join(self.server.sonar[playerName]) if playerName in self.server.sonar else "\n").toByteArray())
+                        self.client.sendPacket(Identifiers.send.Minibox_1, ByteArray().writeUTF("Sonar "+args[0]).writeUTF('\n'.join(self.server.sonar[playerName]) if playerName in self.server.sonar else "\n").toByteArray())
                         self.server.sonar[playerName] = []
                         if arg2 != "fin":
-                            for code in [87,38,37,40,39,65,68,83]:
-                                player.sendPacket(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(code).writeBoolean(True).writeBoolean(True).toByteArray())
-                                player.sendPacket(Identifiers.send.Bind_Key_Board, ByteArray().writeShort(code).writeBoolean(False).writeBoolean(True).toByteArray())
+                            player.sendPacket(Identifiers.send.Init_Sonar, ByteArray().writeInt(2).writeBoolean(True).writeShort(0).toByteArray())
+                        elif arg2 == "stop":
+                            player.sendPacket(Identifiers.send.Init_Sonar, ByteArray().writeInt(2).writeBoolean(False).writeShort(0).toByteArray())
                         
-            elif command in ["test"]:
-                #for code in range(101, 110):
-                #    for i in range(0, 256):
-                #        self.client.sendPacket([code, i], ByteArray().writeUTF(self.client.playerName).toByteArray())
-                #for code in range(140, 145):
-                self.client.sendPacket([144, 30], ByteArray().writeBoolean(True).writeInt(1).writeUTF("").toByteArray())
-                
-                        
+
         except Exception as e:
             sex = ServerException(e)
             sex.SaveException("Commands.log", self.client, "commanderreur")

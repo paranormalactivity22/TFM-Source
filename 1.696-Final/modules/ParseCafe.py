@@ -16,9 +16,6 @@ class Cafe:
         packet = ByteArray().writeBoolean(True).writeBoolean(not self.client.privLevel < 7)
         self.client.CursorCafe.execute("select * from cafetopics order by Date desc limit 0, 20")
         for rs in self.client.CursorCafe.fetchall():
-            if rs["Posts"] == 0:
-                self.client.CursorCafe.execute("delete from cafetopics where TopicID = ?", [rs["TopicID"]])
-                self.client.CursorCafe.execute("delete from cafeposts where TopicID = ?", [rs["TopicID"]])
             packet.writeInt(rs["TopicID"]).writeUTF(rs["Title"]).writeInt(self.server.getPlayerID(rs["Author"])).writeInt(rs["Posts"]).writeUTF(rs["LastPostName"]).writeInt(Utils.getSecondsDiff(rs["Date"]))
         self.client.sendPacket(Identifiers.send.Cafe_Topics_List, packet.toByteArray())
         self.sendWarnings()
@@ -128,3 +125,7 @@ class Cafe:
     def sendWarnings(self):
         self.client.CursorCafe.execute("select * from cafeposts where status = 2 and name = ? order by postid asc", [self.client.playerName])
         self.client.sendPacket(Identifiers.send.Send_Cafe_Warnings, ByteArray().writeShort(len(self.client.CursorCafe.fetchall())).toByteArray())
+        
+    def deletePlayerMessages(self, playerName):
+        self.client.CursorCafe.execute("delete from cafeposts where Name = ?", [playerName])
+        self.client.CursorCafe.execute("delete from cafetopics where Author = ?", [playerName])

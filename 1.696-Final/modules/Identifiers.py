@@ -367,6 +367,7 @@ class Identifiers:
             Open_Sales = 16
             Remove_Sale = 17
             Add_Sale = 18
+            Ranking = 21
     
     class send:
         Sync = [4, 3]
@@ -376,6 +377,7 @@ class Identifiers:
         Remove_Object = [4, 8]
         Crouch = [4, 9]
         Shaman_Position = [4, 10]
+        # [4, 8], [4, 2]
 		
         Rounds_Count = [5, 1]
         New_Map = [5, 2]
@@ -417,6 +419,7 @@ class Identifiers:
         Tutorial = [5, 90]
         
         Chat_Message = [6, 6]
+        Tribe_Message = [6, 8]
         Message = [6, 9]
         Staff_Chat = [6, 10]
         Recv_Message = [6, 20]
@@ -446,12 +449,15 @@ class Identifiers:
         Meep = [8, 38]
         Can_Meep = [8, 39]
         Unlocked_Badge = [8, 42]
+        Send_Gift_Animation = [8, 43]
         Anim_Zelda = [8, 44]
         Anim_Donation = [8, 50]
         Vampire_Mode = [8, 66]
+        # [8, 70]
         
         Tribe_Invite = [16, 2]
         Banner_Login = [16, 9]
+        # [16, 10]
         
         Item_Buy = [20, 2]
         Promotion = [20, 3]
@@ -468,6 +474,7 @@ class Identifiers:
         Shaman_Earned_Level = [24, 2]
         Redistribute_Error_Time = [24, 3]
         Redistribute_Error_Cheeses = [24, 4]
+        # [24, 5]
         
         Modopwet_Open = [25, 2]
         Modopwet_Banned = [25, 5]
@@ -508,7 +515,7 @@ class Identifiers:
         Letter = [28, 15]
         Take_Cheese = [28, 41]
         Log_Message = [28, 46]
-        #Log_Message1 = [28, 48] enter command
+        Enter_Command = [28, 48]
         Request_Info = [28, 50]
         Server_Restart = [28, 88]
 
@@ -596,8 +603,7 @@ class Identifiers:
         Open_Outfits = [144, 22]
         Background_color = [144, 25]
         Open_Sales = [144, 29]
-        setAIEMode = [144, 30] ####
-        PlayerScale = [144, 32]
+        setAIEMode = [144, 30]
         NightMode = [144, 33]
         
         
@@ -671,6 +677,7 @@ class Identifiers:
             Balloon = [8, 16]
             Shaman_Perfomance = [8, 17]
             Save_Remaining = [8, 18]
+            Mute_Player_Message = [8, 19]
             Sync = [8, 21]
             Catch_The_Cheese_Map = [8, 23]
             NPC = [8, 30]
@@ -697,4 +704,6 @@ class Identifiers:
             Music = [26, 12]
             Player_Ban = [26, 17]
             Player_Ban_Login = [26, 18]
+            Facebook_URL = [26, 19]
             Log = [26, 23]
+            Old_Exception = [26, 25] # ["he is stup*d", "The player made an error because"]

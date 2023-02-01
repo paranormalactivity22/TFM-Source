@@ -17,8 +17,6 @@ class Utils:
     @staticmethod
     def getLangueID(langue=None):
         datas = {"EN":0, "FR":1, "RU":2, "BR":3, "ES":4, "CN":5, "TR":6, "VK":7, "PL":8, "HU":9, "NL":10, "RO":11, "ID":12, "DE":13, "E2":14, "AR": 15, "PH":16, "LT":17, "JP":18, "CH":19, "FI":20, "CS":21, "HR":22, "SK": 23, "BG":24, "LV":25, "HE":26, "IT":27, "ET":28, "AZ":29, "PT":30}
-        #datas = {"EN":0, "FR":1, "RU":2, "BR":3, "ES":4, "CN":5, "TR":6, "VK":7, "PL":8, "HU":9, "NL":10, "RO":11, "ID":12, "DE":13, "E2":14, "AR": 15, "PH":16, "LT":17, "JP":18, "CH":19, "FI":20, "CS":21, "HR":22, "SK": 23, "BG":24, "LV":25, "HE":26, "IT":27, "ET":28, "AZ":29, "PT":30, "ZA":30, "VU":31, "BA":32, "AD":33, "MW":34, "DK":35, "EE":36, "NR":37, "TO":38, "MG":39, "WS":40, "MH":41, "GL":42, "BI":43, "RW":44, "KE":45, "RW":46, "MT":47, "MY":48, "HT":49, "LU":50, "NO":51, "UZ":52, "BO":53, "ST":54, "RU":55, "RS":56, "AM":57, "BW":58, "AL":59, "SL":60, "SZ":61, "SO":62, "SE":63, "TL":64, "TM":65, "FJ":66, "SN":67, "NG":68, "IS":69, "GR":70, "BY":71, "KG":72, "MD":73, "MN":74, "TJ":75, "UA":76, "KZ":77, "IL":78, "PK":79, "IR":80, "NP":81, "IN":82, "BD":83, "LK":84, "KR":85, "KH":86, "ER":87, "GE":88, "MM":89, "BT":90, "VI":91, "MV":92, "EG":93}
-        
         if langue in datas:
             return datas[langue]
         return 1# fr
