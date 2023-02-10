@@ -1,0 +1,6 @@
+pymongo[srv]
+aiosqlite
+lupa
+colorconsole
+pillow
+configparser
