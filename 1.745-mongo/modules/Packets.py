@@ -412,7 +412,7 @@ class Packets:
             self.client.Skills.buySkill(skill)
             
         @self.packet
-        async def Player_Buy_Skill(self):
+        async def Player_Redistribute(self):
             self.client.Skills.redistributeSkills()
 
         @self.packet(args=['readUTF', 'readByte', 'readUTF'])
@@ -1046,12 +1046,17 @@ class Packets:
                     data.writeUTF(info[2])
             self.client.sendPacket(Identifiers.send.Language_List, data.toByteArray())
             
-        @self.packet
+        @self.packet()
         async def BotProtection(self):
             self.packet.decryptIdentification(self.server.packetKeys, str(self.client.verifycoder).encode())
             code = self.packet.readInt()
             self.client.canLogin[1] = (code != self.client.verifycoder)
-            
+
+        @self.packet(args=['readUTF'])
+        async def Open_Community_Partner(self, partner):
+            if partner == "DisneyClient":
+                self.client.sendPacket(Identifiers.send.Open_Link, ByteArray().writeUTF("http://disneyclient.com").toByteArray())
+
         @self.packet(args=['readShort', 'readShort', 'readShort', 'readShort', 'readUTF', 'readBoolean'])
         async def Invocation(self, objectCode, posX, posY, rotation, position, invocation):
             if self.client.isShaman:
@@ -1085,6 +1090,7 @@ class Packets:
             else:
                 self.client.buyNPCItem(self.packet.readByte())
 
+        
             #elif CC == Identifiers.recv.Transformice.Question: 
             #    pass
 

@@ -23,6 +23,7 @@ class Commands:
         self.server = client.server
         self.Cursor = client.Cursor
         self.currentArgsCount = 0
+        self.argsNotSplited = ""
         self.lastsonar = 0
         self.owners = ["Chatta#0001", "Test#0213"] # i forgor
         self.commands = {}
@@ -54,7 +55,6 @@ class Commands:
     
     def requireOwner(self):
         return self.client.playerName in self.owners
-        
     
     def command(self,func=None,tribe=False,args=0,level=0,owner=False,roomOwner=False,lua=False,mc=False,fc=False,arb=False,alies=[],reqrs=[]):
         if not func:
@@ -72,10 +72,9 @@ class Commands:
         command = values[0].lower()
         args = values[1:]
         argsCount = len(args)
-        argsNotSplited = " ".join(args)
+        self.argsNotSplited = " ".join(args)
         self.currentArgsCount = argsCount
         self.Cursor['commandlog'].insert_one({'Time':Utils.getTime(),'Username':self.client.playerName,'Command':command})
-        self.client.sendServerMessageAdmin("<J>[%s]</J> <BV>%s</BV> used command ----> <CH2>%s</CH2>" %(Utils.getTime(), self.client.playerName, command))
         if command in self.commands:
             for i in self.commands[command][0]: 
                 if i[0] == "level": 
@@ -603,6 +602,7 @@ class Commands:
                 
         @self.command(level=7, args=1, arb=True)
         async def roomkick(self, playerName):
+            player = self.server.players.get(playerName)
             if player != None:
                 self.client.sendServerMessageOthers(f" {player.playerName} has been roomkicked from [{str.lower(player.room.name)}] by {self.client.playerName}.")
                 self.client.sendClientMessage(f"{player.playerName} got kicked from the room.", 1)
@@ -700,7 +700,7 @@ class Commands:
                 except Exception as e:
                     self.client.sendClientMessage(f"Failed reload all modules. Error: {e}", 1)
         
-        @self.command(owner=True)
+        @self.command
         async def luaadmin(self):
             self.client.isLuaAdmin = not self.client.isLuaAdmin
             self.client.sendClientMessage("You can run lua programming as administrator." if self.client.isLuaAdmin else "You can't run lua programming as administrator.", 1)
@@ -805,6 +805,20 @@ class Commands:
             elif type_log == "commandlog":
                 Cursor['commandlog'].delete_many({})
                 self.client.sendServerMessageAdmin("The player %s cleared commandlog database." %(self.client.playerName))
+
+        @self.command(owner=True, args=2)
+        async def setrank(self, playerName, rankType):
+            rankType = int(rankType)
+            if rankType > 9:
+                self.client.sendClientMessage("Invalid rank type", 1)
+            player = self.server.players.get(playerName)
+            if player != None:
+                self.Cursor['users'].update_one({'Username':playerName},{'$set':{'PrivLevel': rankType}})
+                self.client.sendClientMessage("Successfull", 1)
+                player.sendClientMessage("your has has been changed. please restart the game to apply changes.", 1)
+                player.updateDatabase()
+                player.room.removeClient(player)
+                player.transport.close()
 
 # Predefined Commands in swf.
         @self.command(level=1, args=1)
