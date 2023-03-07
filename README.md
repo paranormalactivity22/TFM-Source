@@ -1,6 +1,6 @@
 # What's this?
 - This is transformice server made in python 3. Works perfectly on 3.5 ~ 3.9.7 versios.
-Transformice is 2010 french flash-game written in AS3 (Action script 3), where purpose is to get cheese and enter in the hole. The game sources were so popular at 2016-2018 year. Latest game source was made by me, (Version : 1.696) Thanks to lucas about game swf. The project is discontinued.
+Transformice is 2010 french flash-game written in AS3 (Action script 3), where purpose is to get cheese and enter in the hole. The game sources were so popular at 2016-2018 year. Latest game source was made by me, (Version : 1.696) Thanks to lucas about game swf. ~~The project is discontinued.~~
 
 # How to run the server? (Video Tutorial: https://youtube.com/watch?v=pjvjAnE1Mmc )
 - As I mention you need python 3, and several modules: pymysql, configparser, twisted, lupa, zope.interface, zlib, ast.
@@ -23,3 +23,5 @@ pip install configparser
 ![image](https://user-images.githubusercontent.com/69107484/208734831-ebddf7b0-7a03-404e-a570-4ba36cdac718.png)
 ![image](https://user-images.githubusercontent.com/69107484/208734884-be5aa9e8-130d-43a2-8ef0-edb4d668bd14.png)
 ![image](https://user-images.githubusercontent.com/69107484/215431252-565219fd-4515-4d0b-9cf3-4183855ed063.png)
+
+# Support Server --> https://discord.gg/VstRmzC3ea
