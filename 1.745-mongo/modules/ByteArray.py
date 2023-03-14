@@ -7,7 +7,7 @@ class ByteArray:
         self.bytes = bytes
 
     def writeByte(self, value: int):
-        value = 255 if int(value) > 255 else int(value)
+        value = 0 if value == None else 255 if int(value) > 255 else int(value)
         self.write(pack("!b" if value < 0 else "!B", value))
         return self
     
@@ -37,12 +37,12 @@ class ByteArray:
         return self.writeShort(value)
 
     def writeShort(self, value:int ):
-        value = 65535 if int(value) > 65535 else int(value)
+        value = 0 if value == None else 65535 if int(value) > 65535 else -32768 if int(value) < -32768 else int(value)
         self.write(pack("!h" if value < 0 else "!H", value))
         return self
     
     def writeInt(self, value:int):
-        value = int(value)
+        value = 0 if value == None else int(value)
         self.write(pack("!i" if value < 0 else "!I", value))
         return self
 
@@ -106,6 +106,9 @@ class ByteArray:
     def writeBytes(self, value):
         if isinstance(value, str):
             value = value.encode()
+        if isinstance(value, list):
+            for i in value: self.writeByte(i)
+            return self
         self.bytes += value
         return self
 

@@ -140,7 +140,9 @@ class Shop:
         shop = self.server.shopList if sendItems else []
         packet.writeInt(len(shop))
         for item in shop:
-            packet.writeShort(item["category"]).writeShort(item["id"]).writeByte(item["customs"]).writeBoolean(item["new"]).writeBoolean("purchasable" in item).writeInt(item["cheese"]).writeInt(item["fraise"]).writeByte(0)
+            packet.writeShort(item["category"]).writeShort(item["id"]).writeByte(item["customs"]).writeBoolean(item["new"]).writeBoolean("purchasable" in item).writeInt(item["cheese"]).writeInt(item["fraise"]).writeBoolean(item["collector"] if 'collector' in item else False)
+            if (item["collector"] if 'collector' in item else False):
+                packet.writeInt(22)
 
         looks = {}
         if sendItems:

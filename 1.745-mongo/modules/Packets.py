@@ -118,7 +118,7 @@ class Packets:
                                 player.bubblesCount -= 1
                                 self.client.sendPlaceObject(self.client.room.objectID + 2, 59, self.client.posX, 450, 0, 0, 0, True, True)
 
-                        if player.desintegration:
+                        if player.desintegration and not self.client.room.noShamanSkills:
                             self.client.Skills.sendSkillObject(6, self.client.posX, 395, 0)
                 self.client.room.checkChangeMap()
     
@@ -143,6 +143,18 @@ class Packets:
                 bodyDef["width"] = width
                 bodyDef["height"] = height
                 self.client.room.addPhysicObject(-1, posX, posY, bodyDef)
+                
+        @self.packet(args=['readInt','readInt','readInt'])
+        async def Bulle(self, bulle_id, timestamp, playerID):
+            playerName = self.client.server.getPlayerName(playerID)
+            if timestamp != int(_time.time() / 100): return self.client.transport.close()
+            if playerName in self.client.server.players:
+                client = self.client.server.players[playerName]
+                if client.room.bulle_id != bulle_id: return self.client.transport.close()
+                self.client = client
+            else:
+                self.client.transport.close()
+            return
         
         @self.packet(args=['readByte', 'readShort', 'readShort'])
         async def Shaman_Message(self, type, x, y):
@@ -150,15 +162,18 @@ class Packets:
 
         @self.packet(args=['readInt'])
         async def Convert_Skill(self, objectID):
-            self.client.Skills.sendConvertSkill(objectID)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendConvertSkill(objectID)
         
         @self.packet(args=['readInt'])
         async def Demolition_Skill(self, objectID):
-            self.client.Skills.sendDemolitionSkill(objectID)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendDemolitionSkill(objectID)
         
         @self.packet(args=['readShort', 'readShort', 'readShort'])
         async def Projection_Skill(self, posX, posY, _dir):
-            self.client.Skills.sendProjectionSkill(posX, posY, _dir)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendProjectionSkill(posX, posY, _dir)
             
         @self.packet(args=['readByte', 'readInt', 'readInt', 'readShort', 'readShort', 'readShort'])
         async def Enter_Hole(self, holeType, roundCode, monde, distance, holeX, holeY):
@@ -182,7 +197,7 @@ class Packets:
                     self.client.tempTotem[1] += "#2#" + chr(1).join(map(str, [code, px, py, angle, vx, vy, int(dur)]))
             else:
                 if code == 44:
-                    if not self.client.useTotem:
+                    if not self.client.useTotem and not self.client.room.noShamanSkills:
                         self.client.sendTotem(self.client.totem[1], px, py, self.client.playerCode)
                         self.client.useTotem = True
 
@@ -224,22 +239,27 @@ class Packets:
         
         @self.packet(args=['readInt', 'readInt'])
         async def Restorative_Skill(self, objectID, id):
-            self.client.Skills.sendRestorativeSkill(objectID, id)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendRestorativeSkill(objectID, id)
         
         @self.packet(args=['readShort'])
         async def Recycling_Skill(self, id):
-            self.client.Skills.sendRecyclingSkill(id)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendRecyclingSkill(id)
             
         @self.packet(args=['readInt', 'readInt'])
         async def Gravitational_Skill(self, velX, velY):
-            self.client.Skills.sendGravitationalSkill(0, velX, velY)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendGravitationalSkill(0, velX, velY)
 
         @self.packet(args=['readInt'])
         async def Antigravity_Skill(self, objectID):
-            self.client.Skills.sendAntigravitySkill(objectID)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendAntigravitySkill(objectID)
 
         @self.packet(args=['readByte', 'readInt'])
         async def Handymouse_Skill(self, handyMouseByte, objectID):
+            if self.client.room.noShamanSkills: return
             if self.client.room.lastHandymouse[0] == -1:
                 self.client.room.lastHandymouse = [objectID, handyMouseByte]
             else:
@@ -247,19 +267,36 @@ class Packets:
                 self.client.room.sendAll(Identifiers.send.Skill, chr(77) + chr(1))
                 self.client.room.lastHandymouse = [-1, -1]
                 
-        @self.packet(args=['readUTF', 'readUTF','readByte'])
-        async def Enter_Room(self, community, roomName, custom):
+        @self.packet(args=['readUTF', 'readUTF']) # here gets the data when create a room.
+        async def Enter_Room(self, community, roomName):
             if self.client.playerName in ["", " "]:
                 self.client.transport.close()
             else:
-                if roomName == "":
-                    self.client.startBulle(self.server.recommendRoom(self.client.langue))
-                elif not roomName == self.client.roomName or not self.client.room.isEditor or not len(roomName) > 64 or not self.client.roomName == "%s-%s" %(self.client.langue, roomName):
+                if not roomName == self.client.roomName or not self.client.room.isEditor or not len(roomName) > 64 or not self.client.roomName == "%s-%s" %(self.client.langue, roomName):
                     if self.client.privLevel < 7: 
                         roomName = self.server.checkRoom(roomName, self.client.langue)
-                    roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") else ("%s-%s" %(self.client.langue, roomName)))
+                    if roomName == "":
+                        roomName = self.server.recommendRoom(self.client.langue)
+                    roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
                     if roomEnter == None or self.client.privLevel >= 7:
-                        self.client.startBulle(roomName)
+                        self.client.sendBulle(roomName)
+                        self.client.enterRoom(roomName)
+                        if self.packet.bytesAvailable():
+                            roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
+                            roomEnter.isCustomRoom = True
+                            self.packet.readByte()
+                            roomEnter.roomPassword = self.packet.readUTF()
+                            roomEnter.noShamanSkills = self.packet.readBoolean()
+                            roomEnter.disablePhysicalConsumables = self.packet.readBoolean()
+                            roomEnter.noAdventureMap = self.packet.readBoolean()
+                            roomEnter.isMiceCollisions = self.packet.readBoolean()
+                            roomEnter.isFallDamage = self.packet.readBoolean()
+                            roomEnter.roundDuration = self.packet.readByte()
+                            roomEnter.miceWeight = self.packet.readInt()
+                            roomEnter.maxPlayers = self.packet.readShort()
+                            x = self.packet.readByte()
+                            while self.packet.bytesAvailable(): roomEnter.mapRotation.append(self.packet.readByte())
+                            self.client.sendPacket(Identifiers.send.Room_Info_Message, ByteArray().writeBoolean(roomEnter.noShamanSkills).writeBoolean(roomEnter.disablePhysicalConsumables).writeBoolean(roomEnter.noAdventureMap).writeBoolean(roomEnter.isMiceCollisions).writeBoolean(roomEnter.isFallDamage).writeByte(roomEnter.roundDuration).writeInt(roomEnter.miceWeight).writeShort(roomEnter.maxPlayers).writeByte(x).writeBytes(roomEnter.mapRotation).toByteArray())
                     else:
                         if roomEnter.roomPassword != "":
                             self.client.sendPacket(Identifiers.send.Room_Password, ByteArray().writeUTF(roomName).toByteArray())
@@ -268,7 +305,7 @@ class Packets:
 
         @self.packet(args=['readUTF', 'readUTF'])
         async def Room_Password(self, roomPass, roomName):
-            roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") else ("%s-%s" %(self.client.langue, roomName)))
+            roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
             if roomEnter == None or self.client.privLevel >= 7:
                 self.client.startBulle(roomName)
             else:
@@ -389,7 +426,7 @@ class Packets:
                         player.sendPlayerEmote(27, flag, False, False)
                         self.client.room.sendAll(Identifiers.send.Joquempo, ByteArray().writeInt(self.client.playerCode).writeByte(random.randint(0, 2)).writeInt(player.playerCode).writeByte(random.randint(0, 2)).toByteArray())
 
-            if self.client.isShaman:
+            if self.client.isShaman and not self.client.room.noShamanSkills:
                 self.client.Skills.parseEmoteSkill(emoteID)
             
             if self.client.room.luaRuntime != None:
@@ -401,7 +438,8 @@ class Packets:
             
         @self.packet(args=['readBoolean'])
         async def Player_Shaman_Fly(self, fly):
-            self.client.Skills.sendShamanFly(fly)
+            if not self.client.room.noShamanSkills:
+                self.client.Skills.sendShamanFly(fly)
         
         @self.packet
         async def Player_Shop_List(self):
@@ -446,7 +484,7 @@ class Packets:
                 p = ByteArray()
                 p.writeUTF(playerName)
                 p.writeUTF(player.playerLook)
-                p.writeInt(len(player.aventurePoints.values()))
+                p.writeInt(player.getAventurePoints())
                 p.writeShort(len(player.titleList))
                 p.writeShort(len(player.shopBadges))
                 #p.writeShort(len(self.server.calendarioSystem.keys())) any way to see if the aventure is working correctly ?
@@ -456,7 +494,9 @@ class Packets:
                     p.writeByte(1)
                     p.writeShort(self.server.events[aventure]["id"])
                     p.writeInt(self.server.events[aventure]["starting_date"])
-                    p.writeInt(self.client.aventurePoints[aventure] if aventure in self.client.aventurePoints.keys() else 0)
+                    if not self.server.events[aventure]["id"] in self.client.aventurePoints:
+                        self.client.aventurePoints[self.server.events[aventure]["id"]] = 0
+                    p.writeInt(self.client.aventurePoints[self.server.events[aventure]["id"]])
                     p.writeBoolean(_time.time() > self.server.events[aventure]["ending_date"])
                     p.writeByte(len(self.server.events[aventure]["items"]))
                     for item in self.server.events[aventure]["items"]:
@@ -572,8 +612,10 @@ class Packets:
         async def Modopwet(self, isOpen):
             if self.client.privLevel >= 7:
                 self.client.modoPwet.openModoPwet(isOpen)
-                p = ByteArray().writeShort(31)
-                for i in ['GB', 'FR', 'RU', 'BR', 'ES', 'CN', 'TR', 'VK', 'PL', 'HU', 'NL', 'RO', 'ID', 'DE', 'E2', 'AR', 'PH', 'LT', 'JP', 'CH', 'FI', 'CZ', 'HR', 'SK', 'BG', 'LV', 'HE', 'IT', 'ET', 'AZ', 'PT']: p.writeUTF(i)
+                languages = ['GB', 'FR', 'RU', 'BR', 'ES', 'CN', 'TR', 'VK', 'PL', 'HU', 'NL', 'RO', 'ID', 'DE', 'E2', 'AR', 'PH', 'LT', 'JP', 'CH', 'FI', 'CZ', 'HR', 'SK', 'BG', 'LV', 'HE', 'IT', 'ET', 'AZ', 'PT']
+                p = ByteArray().writeShort(len(languages))
+                for i in languages: 
+                    p.writeUTF(i)
                 self.client.sendPacket(Identifiers.send.Modopwet_Add_Language, p.toByteArray())
                 self.client.isModoPwet = isOpen
 
@@ -762,8 +804,7 @@ class Packets:
 
         @self.packet
         async def Request_Info(self):
-            #self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray()) # ?
-            f = 1
+            self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray()) # ?
                 
         @self.packet(args=['readShort'])
         async def Transformation_Object(self, objectID):
@@ -893,7 +934,6 @@ class Packets:
         
         @self.packet(args=['readInt', 'readUTF'])
         async def Text_Area_Callback(self, textAreaID, event):
-            print(event)
             if event in ["lbileri","lbgeri","lbkapat"]:
                 self.client.lbSayfaDegis(event=="lbileri", event=="lbkapat")
                 return 

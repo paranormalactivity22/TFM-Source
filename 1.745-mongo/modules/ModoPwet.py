@@ -145,11 +145,20 @@ class ModoPwet:
             else:
                 reports,bannedList,deletedList,disconnectList = self.sortReports(self.server.reports,sortBy),{},{},[]
                 cnt = 0
+                _del = 0
                 p = ByteArray()  
                 for i in reports:
                     playerName = i[0]
                     v = self.server.reports[playerName]
                     if self.client.modoPwetLangue == 'ALL' or v["language"] == self.client.modoPwetLangue:
+                        for name in v["reporters"]:
+                            if int(time.time() - v["reporters"][name][2]) > 86400:
+                                del self.server.reports[playerName]
+                                _del = True
+                                break
+                        if _del:
+                            _del = 0
+                            continue
                         player = self.server.players.get(playerName)
                         TimePlayed = math.floor(player.playerTime/3600) if player != None else 0
                         playerNameRoom = player.roomName if player != None else "0"

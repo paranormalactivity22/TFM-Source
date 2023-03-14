@@ -385,6 +385,12 @@ class Client:
                 else:
                     self.validatingVersion = True
                     self.sendCorrectVersion(lang)
+            else:
+                if (C == 44 and CC == 1):
+                    self.validatingVersion = True
+                    await self.Packets.parsePacket(packetID, C, CC, packet)
+                    return
+                self.transport.close()
         else:
             try:
                 self.lastPacketID = packetID
@@ -394,7 +400,7 @@ class Client:
                 await self.Packets.parsePacket(packetID, C, CC, packet)
             except Exception as e:
                 sex = ServerException(e)
-                sex.SaveException("Server.log", self.client, "servererreur")
+                sex.SaveException("Server.log", self, "servererreur")
 
 # Functions
 
@@ -501,8 +507,7 @@ class Client:
         rrf = self.Cursor['account'].find_one({'Ip':self.ipAddress})
         return rrf is None or int(str(time.time()).split(".")[0]) >= int(rrf['Time'])
             
-    def enterRoom(self, roomName): ###########
-        #self.sendBulle()
+    def enterRoom(self, roomName):
         if self.isPrisoned:
             return
         if self.isTrade:
@@ -515,13 +520,13 @@ class Client:
             if roomName.startswith(rooms) and not self.playerName == roomName.split(" ")[1]:
                 roomName = "%s-%s" %(self.langue, self.playerName)
             
-        if self.room != None:
-            self.room.removeClient(self)
+        #if self.room != None:
+            #self.room.removeClient(self)
 
         self.roomName = roomName
         self.sendGameType(11 if "music" in roomName else 4, 0)
         self.sendEnterRoom(roomName)
-        self.server.addClientToRoom(self, roomName)
+        #self.server.addClientToRoom(self, roomName)
         self.sendPacket(Identifiers.old.send.Anchors, self.room.anchors)
 
         for player in self.server.players.values(): 
@@ -675,10 +680,10 @@ class Client:
                 self.sendTotemItemCount(0)
 
     async def loginPlayer(self, playerName, password, startRoom):
-        if not playerName.split('#')[0] in ['sim_pro', 'Test']: #blacklist
-            for i in range(0, 100):
-                self.sendPacket([28, 61], ByteArray().writeInt(100-i).toByteArray())
-                await asyncio.sleep(1+i)
+        #if not playerName.split('#')[0] in ['sim_pro', 'Test']: #blacklist
+        #    for i in range(0, 100):
+        #        self.sendPacket([28, 61], ByteArray().writeInt(100-i).toByteArray())
+        #        await asyncio.sleep(1+i)
         if not self.canLogin[0]: 
             print("[%s] [FATAL] Cannot receive player's computer language (%s)" %(time.strftime("%H:%M:%S"), playerName))
             self.transport.close()
@@ -841,11 +846,12 @@ class Client:
                 self.playerCode = self.server.lastPlayerCode
                 self.server.players[self.playerName] = self
                 self.ipCountry = self.getCountryIP(self.ipAddress)
-                Cursor['loginlogs'].insert_one({'Username':playerName,'Ip':Utils.EncodeIP(self.ipAddress), 'IPColor':self.ipCountry, 'Time': Utils.getDate(), 'Community': self.langue, 'ConnectionID':self.server.miceName})
+                Cursor['loginlogs'].insert_one({'Username':playerName,'Ip':Utils.EncodeIP(self.ipAddress), 'IPColor':self.ipCountry, 'Country':self.getCountryIP(self.ipAddress), 'Time': Utils.getDate(), 'Community': self.langue, 'ConnectionID':self.server.miceName})
                 loginlog = open("./include/logs/Logins.log", "a")
                 loginlog.write("PlayerName: %s | IP Address: %s | Date: %s | Language: %s | Player Code: %s |.\n" % (playerName, self.ipAddress, Utils.getDate(), self.langue, self.playerCode))
                 traceback.print_exc(file=loginlog)
-                loginlog.close() 
+                loginlog.close()
+                self.sendPacket(Identifiers.send.Community_Partners, ByteArray().writeShort(1).writeUTF("DisneyClient").writeUTF("https://disneyclient.com/public/logo.png").toByteArray())
                 
                 if not self.isGuest:
                     # Staff Positions
@@ -919,11 +925,28 @@ class Client:
                 self.resSkillsTimer = self.server.loop.call_later(600, setattr, self, "canRedistributeSkills", True)
                 self.startBulle(self.server.checkRoom(startRoom, self.langue) if not startRoom == "" and not startRoom == "1" else self.server.recommendRoom(self.langue))
 
-    def startBulle(self, roomName): ###########
+    def startBulle(self, roomName):
         if not self.isEnterRoom:
             self.isEnterRoom = True
+            self.server.loop.call_later(0.2, lambda: self.sendBulle(roomName))
             self.server.loop.call_later(0.8, lambda: self.enterRoom(roomName))
-            self.server.loop.call_later(6, setattr, self, "isEnterRoom", False)
+            self.server.loop.call_later(1 if self.server.isDebug else 6, setattr, self, "isEnterRoom", False)
+    
+    def sendBulle(self, roomName): #i think bc of this
+        if self.room != None:
+            self.room.removeClient(self)
+        roomName = roomName.replace("<", "&lt;")
+        if not roomName.startswith("*") and not roomName.startswith("@") and not (len(roomName) > 3 and roomName[2] == "-" and self.privLevel >= 7):
+            roomName = "%s-%s" %(self.langue, roomName)
+            
+        for rooms in ["\x03[Editeur] ", "\x03[Totem] ", "\x03[Tutorial] "]:
+            if roomName.startswith(rooms) and not self.playerName == roomName.split(" ")[1]:
+                roomName = "%s-%s" %(self.langue, self.playerName)
+        self.server.addClientToRoom(self, roomName)
+        if self.room.bulle_id == 0:
+            self.room.bulle_id = random.randint(0, 7)
+        timestamp = int(time.time() / 100)
+        #self.sendPacket(Identifiers.send.Bulle, ByteArray().writeInt(self.room.bulle_id).writeInt(timestamp).writeInt(self.playerID if not self.isGuest else -1).writeUTF("127.0.0.1").writeUTF("11801-12801-13801-14801").toByteArray())
 
     def startPlay(self): ###########
         self.playerStartTimeMillis = self.room.gameStartTimeMillis
@@ -1005,9 +1028,6 @@ class Client:
     def sendBanConsideration(self):
         self.sendPacket(Identifiers.old.send.Ban_Consideration, ["0"])
 
-    def sendBulle(self): ###########
-        self.sendPacket(Identifiers.send.Bulle, ByteArray().writeByte(0).writeUTF("x").toByteArray())
-
     def sendClientMessage(self, message, tab=False):
         self.sendPacket(Identifiers.send.Recv_Message, ByteArray().writeBoolean(tab).writeUTF(message).writeByte(1).writeUTF("").toByteArray())
 
@@ -1033,6 +1053,7 @@ class Client:
         self.sendPacket(Identifiers.send.Image_Login, ByteArray().writeUTF(self.server.adventureIMG).toByteArray())
         self.verifycoder = random.choice(range(0, 10000))
         self.sendPacket(Identifiers.send.Verify_Code, ByteArray().writeInt(self.verifycoder).toByteArray())
+        self.sendPacket([100, 101], ByteArray().writeByte(1).writeBoolean(True).toByteArray())
 
     def sendEmotion(self, emotion):
         self.room.sendAllOthers(self, Identifiers.send.Emotion, ByteArray().writeInt(self.playerCode).writeByte(emotion).toByteArray())
@@ -1046,10 +1067,9 @@ class Client:
             if rooms.startswith(room) and not count == "" or rooms.isdigit():
                 found = not (int(count) < 1 or int(count) > 1000000000 or rooms == room)
 
-        self.sendPacket(Identifiers.send.Enter_Room, ByteArray().writeBoolean(found).writeUTF("*?" if self.isTribeOpen else roomName).writeUTF("int" if roomName.startswith("*") or roomName.startswith("@") else lang).toByteArray())
+        self.sendPacket(Identifiers.send.Enter_Room, ByteArray().writeBoolean(found).writeUTF(roomName).writeUTF("int" if roomName.startswith("*") or roomName.startswith("@") else lang).toByteArray())
 
     def sendGameType(self, gameType, serverType): ###########
-        #self.sendPacket(Identifiers.send.Bulle_ID, chr(self.lastPacketID))
         self.sendPacket(Identifiers.send.Room_Type, gameType)
         self.sendPacket(Identifiers.send.Room_Server, serverType)
 
@@ -1089,11 +1109,24 @@ class Client:
                 if ({1:checkRoom.isNormRoom, 3:checkRoom.isVanilla, 8:checkRoom.isSurvivor, 9:checkRoom.isRacing or checkRoom.isFastRacing, 11:checkRoom.isMusic, 2:checkRoom.isBootcamp, 10:checkRoom.isDefilante, 18:0, 16:checkRoom.isVillage}[mode]):
                     roomsCount += 1
                     if checkRoom.roomName[:1] == '@': continue
-                    packet.writeByte(0).writeUTF(self.langue.lower() if not "*" in checkRoom.roomName else "int").writeUTF(self.langue.lower() if not "*" in checkRoom.roomName else "int").writeUTF(checkRoom.roomName).writeShort(checkRoom.getPlayerCount()).writeUnsignedByte(checkRoom.maxPlayers).writeBoolean(checkRoom.isFuncorpRoomName).writeByte(0)
+                    packet.writeByte(0).writeUTF(self.langue.lower() if not "*" in checkRoom.roomName else "int").writeUTF(self.langue.lower() if not "*" in checkRoom.roomName else "int").writeUTF(checkRoom.roomName).writeShort(checkRoom.getPlayerCount()).writeUnsignedByte(checkRoom.maxPlayers).writeBoolean(checkRoom.isFuncorpRoomName).writeBoolean(checkRoom.isCustomRoom)
+                    if checkRoom.isCustomRoom:
+                        packet.writeBoolean(checkRoom.noShamanSkills).writeBoolean(checkRoom.disablePhysicalConsumables).writeBoolean(checkRoom.noAdventureMap).writeBoolean(checkRoom.isMiceCollisions).writeBoolean(checkRoom.isFallDamage).writeByte(checkRoom.roundDuration).writeInt(checkRoom.miceWeight).writeShort(checkRoom.maxPlayers).writeByte(len(checkRoom.mapRotation))
+                        for i in checkRoom.mapRotation: packet.writeByte(i)
 
             if roomsCount == 0 or [] == [test.roomName for test in self.server.rooms.values() if (test.roomName[:1] == '*' or test.roomName[:1] == '@') == False]:
                 packet.writeByte(0).writeUTF(self.langue.lower()).writeUTF(self.langue.lower()).writeUTF(("" if mode == 1 else (modeInfo[0]).split(" ")[1]) + "1").writeShort(0).writeByte(200).writeBoolean(False).writeByte(0)
         self.sendPacket(Identifiers.send.Game_Mode, packet.toByteArray())
+
+#this._SafeStr2874 = _arg1.readBoolean(); # Without shaman skills
+#this._SafeStr2875 = _arg1.readBoolean(); # Without physical consumables
+#this._SafeStr2876 = _arg1.readBoolean(); # Without adventure maps
+#this._SafeStr615 = _arg1.readBoolean(); # With mice collisions
+#this._SafeStr452 = _arg1.readBoolean();  # With fall damage (ouch!)
+#this._SafeStr2877 = _arg1.readUnsignedByte(); # Round's duration
+#this._SafeStr2878 = _arg1.readInt(); # Mice weight 
+#this._SafeStr2879 = _arg1.readShort(); # number of players
+#var _local2:int = _arg1.readUnsignedByte(); map rotation
 
     def sendGiveCheese(self, distance=-1):
         if distance != -1 and distance != 1000 and not self.room.catchTheCheeseMap:
@@ -1179,7 +1212,7 @@ class Client:
         else:
             xml = b"" if newMap else self.room.mapXML.encode() if isinstance(self.room.mapXML, str) else self.room.mapXML if newMapCustom else self.room.EMapXML.encode() if isinstance(self.room.EMapXML, str) else self.room.EMapXML
         xml = zlib.compress(xml)
-        self.sendPacket(Identifiers.send.New_Map, ByteArray().writeInt(self.room.currentMap if newMap else self.room.mapCode if newMapCustom else -1).writeShort(self.room.getPlayerCount()).writeByte(self.room.lastRoundCode).writeInt(len(xml)).writeBytes(xml).writeUTF("" if newMap else self.room.mapName if newMapCustom else "-").writeByte(0 if newMap else self.room.mapPerma if newMapCustom else 100).writeBoolean(self.room.mapInverted if newMapCustom else False).writeShort(0).writeByte(0).writeInt(0).toByteArray())
+        self.sendPacket(Identifiers.send.New_Map, ByteArray().writeInt(self.room.currentMap if newMap else self.room.mapCode if newMapCustom else -1).writeShort(self.room.getPlayerCount()).writeByte(self.room.lastRoundCode).writeInt(len(xml)).writeBytes(xml).writeUTF("" if newMap else self.room.mapName if newMapCustom else "-").writeByte(0 if newMap else self.room.mapPerma if newMapCustom else 100).writeBoolean(self.room.mapInverted if newMapCustom else False).writeBoolean(False).writeBoolean(self.room.isMiceCollisions).writeBoolean(self.room.isFallDamage).writeInt(self.room.miceWeight).toByteArray())
 
     def sendMapStartTimer(self, startMap):
         self.sendPacket(Identifiers.send.Map_Start_Timer, ByteArray().writeBoolean(startMap).toByteArray())
@@ -1280,6 +1313,12 @@ class Client:
     def sendPlayerDied(self):
         self.room.sendAll(Identifiers.old.send.Player_Died, [self.playerCode, self.playerScore])
         self.hasCheese = False
+        
+        for player in self.room.clients.copy().values():
+            if player.isShaman:
+                if 15 in player.playerSkills and (self.room.isNormRoom or self.room.isVanilla or self.room.isMusic):
+                    self.room.sendPacket(Identifiers.send.Dead_Bubble, ByteArray().writeShort(0).toByteArray())
+                    break
 
         if self.room.getAliveCount() < 1 or self.room.catchTheCheeseMap or self.isAfk:
             self.canShamanRespawn = False
@@ -1413,11 +1452,20 @@ class Client:
             
             for shamanBadge in shamanBadges:
                 packet.writeByte(shamanBadge)
+                
+            packet.writeBoolean(True)
+            packet.writeInt(player.getAventurePoints())
 
-            self.sendPacket(Identifiers.send.Profile, packet.writeBoolean(True).writeInt(len(player.aventurePoints.copy().values())).toByteArray())
+            self.sendPacket(Identifiers.send.Profile, packet.toByteArray())
 
     def sendShamanCode(self, shamanCode, shamanCode2):
         self.sendPacket(Identifiers.send.Shaman_Info, ByteArray().writeInt(shamanCode).writeInt(shamanCode2).writeByte(self.server.getShamanType(shamanCode)).writeByte(self.server.getShamanType(shamanCode2)).writeShort(self.server.getShamanLevel(shamanCode)).writeShort(self.server.getShamanLevel(shamanCode2)).writeShort(self.server.getShamanBadge(shamanCode)).writeShort(self.server.getShamanBadge(shamanCode2)).writeByte(0).writeByte(0).toByteArray())
+
+    def getAventurePoints(self):
+        x = 0
+        for i in self.aventurePoints:
+            x += self.aventurePoints[i]
+        return x
 
     def sendShamanType(self, mode, canDivine, isNoSkills):
         self.sendPacket(Identifiers.send.Shaman_Type, ByteArray().writeByte(mode).writeBoolean(canDivine).writeInt(int(self.shamanColor, 16)).writeByte(isNoSkills).toByteArray())
@@ -1641,7 +1689,7 @@ class Client:
                 self.sendPacket(Identifiers.send.Trade_Close)
                 self.sendInventoryConsumables()
           
-    def updateDatabase(self): ###
+    def updateDatabase(self):
         if not self.isGuest:
             self.missions.updateMissions()
             update = {}
@@ -1655,11 +1703,12 @@ class Client:
             for i in ['ShamanBadges', 'EquipedConsumables', 'DefilanteStats', 'RacingStats', 'SurvivorStats', 'CheeseTitleList','FirstTitleList','ShamanTitleList','ShopTitleList','BootcampTitleList','HardModeTitleList','DivineModeTitleList','SpecialTitleList']: update[i] = ",".join(map(str, eval(f"self.{i[:1].lower() + i[1:]}")))
             for i in ['Roles','AventureSaves', 'PrivLevel','TitleNumber','FirstCount','CheeseCount','ShamanCheeses','ShopCheeses','ShopFraises','ShamanSaves','ShamanSavesNoSkill','HardModeSaves','HardModeSavesNoSkill','DivineModeSaves','DivineModeSavesNoSkill','BootcampCount','ShamanType','ShopItems','ShamanItems','EquipedShamanBadge', 'Fur', 'Pet','ShamanLook','MouseColor','ShamanColor','BanHours','ShamanLevel','ShamanExp','ShamanExpNext','Gender','LastDivorceTimer','Marriage','TribeCode','TribeRank','TribeJoined']: update[i] = eval(f"self.{i[:1].lower() + i[1:]}")
             Cursor['users'].update_one({'Username':self.playerName},{'$set':update})
+    
     def useConsumable(self, consumableID):
         if consumableID in self.playerConsumables and not self.isDead and not self.room.disablePhysicalConsumables:
             if str(consumableID) in self.server.inventoryConsumables:
                 obj = self.server.inventoryConsumables.get(str(consumableID))
-                if "launchObject" in obj and not self.room.isRacing and not self.room.isBootcamp and not self.room.isSurvivor and not self.room.isDefilante:
+                if "launchObject" in obj:
                     objectCode = obj["launchObject"]
                     if objectCode == 11:
                         self.room.objectID += 2
@@ -2025,6 +2074,7 @@ class Client:
 class Server(asyncio.Transport):
     def __init__(self):
         # String
+        self.loop = asyncio.get_event_loop()
         self.miceName = str(self.config("game.miceName"))
         self.CKEY = self.configSWF("swf.ckey")
         self.Version = self.configSWF("swf.version")
@@ -2131,7 +2181,6 @@ class Server(asyncio.Transport):
         self.loadEvents()
         self.loadOfficialMinigames()
         self.loadShopList()
-        self.loop = asyncio.get_event_loop()
         os.system("title Transformice")
         T = win.Terminal()
         for port in self.portlist:
@@ -2172,14 +2221,14 @@ class Server(asyncio.Transport):
             if room.minigame != "":
                 room.loadLuaModule(room.minigame)
             else:
-                self.loop.create_task(room.mapChange()) # tf
+                room.mapChange2()
 
     def banPlayer(self, playerName, bantime, reason, modname, silent):  
         player = self.players.get(playerName)
         if player != None:
             if modname == "Server":
                 self.sendServerMessage(f"The player {playerName} was banned for {bantime} hour(s). Reason: Vote Populaire.")
-            player.banHours += bantime
+            player.banHours += bantime # <--
             Cursor['users'].update_one({'Username':playerName},{'$set':{'BanHours':player.banHours}})
             
             if player.banHours <= 360:
@@ -2259,7 +2308,7 @@ class Server(asyncio.Transport):
 
     async def checkRecordMap(self, mapCode):
         await CursorMaps.execute('select RecDate from Maps where Code = ?', [mapCode])
-        return (await CursorMaps.fetchone()) > 0
+        return (await CursorMaps.fetchone())[0] > 0
 
     def checkTempBan(self, playerName):
         return Cursor['usertempban'].find_one({'Username':playerName}) != None
@@ -2723,7 +2772,6 @@ class Room:
         self.currentSyncName = ""
         self.currentShamanName = ""
         self.currentSecondShamanName = ""
-        self.bulle = "bulle1"
 
         # Integer
         self.lastImageID = 0
@@ -2763,6 +2811,11 @@ class Room:
         self.gameStartTimeMillis = 0
         self.currentSecondShamanCode = -1
         self.currentSecondShamanType = -1
+        self.roundDuration = 0
+        self.miceWeight = 0
+        
+        self.bulle_id = 0
+        self.bulle_ping = 0
 
         # Bool
         self.isMusic = False
@@ -2814,6 +2867,11 @@ class Room:
         self.notUpdatedScore = False
         self.nextEvent = False
         self.isEvent = False
+        self.isCustomRoom = False
+        self.noShamanSkills = False
+        self.noAdventureMap = False
+        self.isMiceCollisions = False
+        self.isFallDamage = False
         
         # Nonetype
         self.killAfkTimer = None
@@ -2831,6 +2889,7 @@ class Room:
         self.blueTeam = []
         self.roomTimers = []
         self.musicVideos = []
+        self.mapRotation = []
         self.lastHandymouse = [-1, -1]
         
         self.noShamanMaps = [7, 8, 10, 14, 22, 23, 28, 29, 33, 42, 55, 57, 58, 61, 70, 77, 78, 87, 88, 122, 123, 124, 125, 126, 148, 149, 150, 151, 172, 173, 174, 175, 178, 179, 180, 188, 189, 190, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 218, 219, 220, 221, 222, 224, 225]
@@ -2960,9 +3019,11 @@ class Room:
         
         if not self.canChangeMap:
             self.changeMapAttemps += 1
-            if self.changeMapAttemps < 5:
-                self.changeMapTimer = self.server.loop.call_later(1, self.server.loop.create_task, self.mapChange())
+            await asyncio.sleep(1)
+            if self.changeMapAttemps >= 5:
                 return
+            else:
+                return await self.mapChange()
 
         for timer in self.roomTimers:
             timer.cancel()
@@ -2980,12 +3041,13 @@ class Room:
                 self.voteCloseTimer = self.server.loop.call_later(8, self.server.loop.create_task, self.closeVoting())
                 for player in self.clients.copy().values():
                     player.sendPacket(Identifiers.old.send.Vote_Box, [self.mapName, self.mapYesVotes, self.mapNoVotes])
+                return
             else:
                 self.votingMode = False
                 return await self.closeVoting()
 
         elif self.isTribeHouse and self.isTribeHouseMap:
-            pass
+            return
         else:
             if self.isVotingMode:
                 TotalYes = self.mapYesVotes + self.receivedYes
@@ -3157,7 +3219,7 @@ class Room:
                         
             self.startTimerLeft = self.server.loop.call_later(3, self.startTimer)
             if not self.isFixedMap and not self.isTribeHouse and not self.isTribeHouseMap:
-                self.changeMapTimer = self.server.loop.call_later(self.roundTime + self.addTime, self.server.loop.create_task, self.mapChange())
+                self.changeMapTimer = self.server.loop.call_later(self.roundTime + self.addTime,self.mapChange2)
             
             self.killAfkTimer = self.server.loop.call_later(30, self.killAfk)
             if self.autoRespawn or self.isTribeHouseMap:
@@ -3265,7 +3327,7 @@ class Room:
 
     async def selectMapStatus(self):
         maps = [0, -1, 4, 9, 5, 0, -1, 8, 6, 7]
-        selectPerma = (17 if self.mapStatus % 2 == 0 else 7) if self.isRacing or self.isFastRacing else (13 if self.mapStatus % 2 == 0 else 3) if self.isBootcamp else 18 if self.isDefilante else (11 if self.mapStatus == 0 else 10) if self.isSurvivor else 19 if self.isMusic and self.mapStatus % 2 == 0 else 0
+        selectPerma = random.choice(self.mapRotation) if len(self.mapRotation) != 0 else (17 if self.mapStatus % 2 == 0 else 7) if self.isRacing or self.isFastRacing else (13 if self.mapStatus % 2 == 0 else 3) if self.isBootcamp else 18 if self.isDefilante else (11 if self.mapStatus == 0 else 10) if self.isSurvivor else 19 if self.isMusic and self.mapStatus % 2 == 0 else 0
         isMultiple = False
 
         if self.isNormRoom:
@@ -3326,9 +3388,9 @@ class Room:
             runMap = 0 if runMap == None else runMap[0]
 
             if runMap == 0:
-                map = random.choice(self.MapList)
+                map = random.choice(self.mapList)
                 while map == self.currentMap:
-                    map = random.choice(self.MapList)
+                    map = random.choice(self.mapList)
                 return map
             else:
                 mapInfo = await self.getMapInfo(runMap)
@@ -3353,12 +3415,17 @@ class Room:
 
     def changeMapTimers(self, seconds):
         if self.changeMapTimer != None: self.changeMapTimer.cancel()
-        self.changeMapTimer = self.server.loop.call_later(seconds, self.server.loop.create_task, self.mapChange())
+        self.canChangeMap = True
+        self.changeMapTimer = self.server.loop.call_later(seconds, self.mapChange2)
 
+    def mapChange2(self):
+        self.server.loop.create_task(self.mapChange())
+        
     def checkChangeMap(self):
         if (not (self.isBootcamp or self.autoRespawn or self.isTribeHouse and self.isTribeHouseMap or self.isFixedMap)):
             alivePeople = list(filter(lambda player: not player.isDead, self.clients.copy().values()))
             if not alivePeople:
+                self.canChangeMap = True
                 self.server.loop.create_task(self.mapChange())
 
     def checkMapXML(self):
@@ -3771,7 +3838,7 @@ class Room:
             if player != None:
                 player.sendPacket(Identifiers.send.Add_Popup, p.toByteArray())
 
-    def addQuestanoablePopup(self, question="", popupID=0, targetPlayer="", _class="", small=True, big=False):
+    def addQuestanoablePopup(self, question="", popupID=0, targetPlayer="", _class="", small=True, big=0):
         if small:
             p = ByteArray().writeByte(1).writeUTF(_class).writeInt(popupID).writeBoolean(big).writeBoolean(big).writeUTF(question).toByteArray()
         else:

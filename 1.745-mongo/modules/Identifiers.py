@@ -262,7 +262,6 @@ class Identifiers:
         Send_gift = (28, 16)
         Computer_Info = (28, 17)
         Change_Shaman_Color = (28, 18)
-        Tribulle_API = (28, 50)
 
         Lua_Script = (29, 1)
         Key_Board = (29, 2)
@@ -292,6 +291,8 @@ class Identifiers:
         Cancel_Trade = (31, 6)
         Trade_Add_Consusmable = (31, 8)
         Trade_Result = (31, 9)
+        
+        Bulle = (44, 1)
 
         Old_Tribulle = (60, 1)
         Tribulle = (60, 3)
@@ -306,13 +307,15 @@ class Identifiers:
         
         Set_Language = (176, 1)
         Language_List = (176, 2)
+        Open_Community_Partner = (176, 4)
         BotProtection = (176, 47)
+        
+        
         Open_Missions = (149, 1)
         Change_Mission = (149, 2)
         Report_Cafe_Post = (149, 4)
         Send_Warnings = (149, 5)
         Check_Cafe_Message = (149, 6)
-        
         Sonar_System = (149, 8)
         Attach_Player = (149, 10)
         NotAttach_Player = (149, 11)
@@ -534,8 +537,10 @@ class Identifiers:
         Switch_Tribulle = [60, 4]
 
         Invocation = [100, 2]
-        Remove_Invocation = [100, 3]
+        Remove_Invocation = [100, 3] # remove by id
         Joquempo = [100, 5]
+        Dead_Bubble = [100, 7]
+        #Remove_Invocation2 = [100, 10] # remove by utf
         Buy_Full_Look = [100, 31]
         Crazzy_Packet = [100, 40]
         Questionable_Popup = [100, 50]
@@ -562,7 +567,7 @@ class Identifiers:
         Browser_Version_Attention = [144, 13]
         Change_Nickname_Popup = [144, 14]
         Minibox_1 = [144, 17]
-        Room_Info_New = [144, 18]
+        Room_Info_Message = [144, 18]
         AttachPlayer = [144, 20]
         UnAttachPlayer = [144, 21]
         Open_Outfits = [144, 22]
@@ -577,7 +582,7 @@ class Identifiers:
         NightMode = [144, 33]
         Fur_Cache = [144, 34]
         Ranking = [144, 36]
-        Play_Sound = [144, 38]
+        #Play_Sound = [144, 38]
         
         # new new packets
         
@@ -588,6 +593,7 @@ class Identifiers:
         Set_Language = [176, 5]
         Language_List = [176, 6]
         Verify_Code = [176, 7]
+        Community_Partners = [176, 8]
         Open_Link = [176, 9]
 
     class old:

@@ -9,9 +9,11 @@ class Cafe:
         self.chec = 0
 
     async def loadCafeMode(self):
-        if self.client.isGuest or self.client.cheeseCount < 1000 and self.client.playerTime < 108000:
+        # self.client.cheeseCount < 1000 and self.client.playerTime < 108000
+        if self.client.isGuest or (True):
             self.client.sendLangueMessage("", "<ROSE>$PasAutoriseParlerSurServeur")
-        self.client.sendPacket(Identifiers.send.Open_Cafe, ByteArray().writeBoolean(not self.client.isGuest and not (self.client.cheeseCount < 1000 and self.client.playerTime < 108000)).toByteArray())
+            # not self.client.isGuest and not (self.client.cheeseCount < 1000 and self.client.playerTime < 108000)
+        self.client.sendPacket(Identifiers.send.Open_Cafe, ByteArray().writeBoolean(True).toByteArray())
 
         packet = ByteArray().writeBoolean(True).writeBoolean(not self.client.privLevel < 7)
         await self.client.CursorCafe.execute("select * from cafetopics order by Date desc limit 0, 20")
@@ -25,13 +27,18 @@ class Cafe:
         packet = ByteArray().writeBoolean(True).writeInt(topicID).writeBoolean(0).writeBoolean(True)
         await self.client.CursorCafe.execute("select * from cafeposts where TopicID = ? order by PostID asc", [topicID])
         rss = await self.client.CursorCafe.fetchall()
+        cafe = False
         for rs in rss:
+            cafe = True
             if self.client.privLevel >= 7 and rs["Status"] in [0, 2]:
                 packet.writeInt(rs["PostID"]).writeInt(self.server.getPlayerID(rs["Name"])).writeInt(Utils.getSecondsDiff(rs["Date"])).writeUTF(rs["Name"]).writeUTF(rs["Post"]).writeBoolean(str(self.client.playerCode) not in rs["Votes"].split(",")).writeShort(rs["Points"]).writeUTF(rs["ModeratedBY"]).writeByte(rs["Status"])
                 self.chec = rs["PostID"]
             elif rs["Status"] < 2:
                 packet.writeInt(rs["PostID"]).writeInt(self.server.getPlayerID(rs["Name"])).writeInt(Utils.getSecondsDiff(rs["Date"])).writeUTF(rs["Name"]).writeUTF(rs["Post"]).writeBoolean(str(self.client.playerCode) not in rs["Votes"].split(",")).writeShort(rs["Points"]).writeUTF("").writeByte(rs["Status"])
         self.server.lastCafeTopicID = topicID
+        if not cafe:
+            await self.client.CursorCafe.execute("delete from cafetopics where TopicID = ?", [topicID])
+            return await self.loadCafeMode()
         self.client.sendPacket(Identifiers.send.Open_Cafe_Topic, packet.toByteArray())
         
     async def createNewCafePost(self, topicID, message):
@@ -52,7 +59,7 @@ class Cafe:
     async def createNewCafeTopic(self, title, message):
         if not self.server.checkMessage(title):
             await self.client.CursorCafe.execute("insert into cafetopics values (null, ?, ?, '', 0, ?, ?)", [title, self.client.playerName, Utils.getTime(), self.client.langue])
-            self.createNewCafePost(await self.client.CursorCafe.lastrowid, message)
+            await self.createNewCafePost(self.client.CursorCafe.lastrowid, message)
         await self.loadCafeMode()
         
     async def voteCafePost(self, topicID, postID, mode):
