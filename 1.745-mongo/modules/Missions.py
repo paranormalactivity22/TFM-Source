@@ -27,8 +27,14 @@ class Missions:
     def activateMissions(self):
     	self.client.sendPacket(Identifiers.send.Activate_Missions, ByteArray().writeBoolean(True).toByteArray())
         
-    def updateMissions(self,t=True):
+    def updateMissions(self):
         self.Cursor['missions'].update_one({'userid':self.client.playerID},{'$set':{'missions':json.dumps(self.playerMissions),'totalfinished_missions':self.missionsCompleted}})
+
+    #def getMissionsGuest(self):
+    #    i = 0
+    #    while i < 3:
+    #        self.randomMission()
+    #        i += 1
 
     def getMissions(self):
         rs = self.Cursor['missions'].find_one({'userid':self.client.playerID})

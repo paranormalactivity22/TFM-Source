@@ -411,10 +411,10 @@ class Lua:
         self._G['tfm']['get']['room']['community'] = self.room.community
         self._G['tfm']['get']['room']['language'] = self.room.community
         self._G['tfm']['get']['room']['currentMap'] = self.room.mapCode
-        self._G['tfm']['get']['room']['maxPlayers'] = self.room.maxPlayers
+        self._G['tfm']['get']['room']['maxPlayers'] = self.room.roomDetails[8]
         self._G['tfm']['get']['room']['mirroredMap'] = self.room.mapInverted
         self._G['tfm']['get']['room']['uniquePlayers'] = len(self.room.clients)
-        self._G['tfm']['get']['room']['passwordProtected'] = self.room.roomPassword != ""
+        self._G['tfm']['get']['room']['passwordProtected'] = self.room.roomDetails[10] != ""
         self._G['tfm']['get']['room']['isTribeHouse'] = self.room.isTribeHouse
 
         self._G['tfm']['get']['room']['objectList'] = {}
@@ -796,7 +796,7 @@ class Lua:
         self.room.disableAfkKill = status
         
     def disableAllShamanSkills(self, status=True):
-        self.room.noShamanSkills = int(status)
+        self.room.roomDetails[1] = int(status)
 
     def disableAutoNewGame(self, status=True):
         self.room.isFixedMap = status
@@ -826,7 +826,7 @@ class Lua:
         self.room.sendAll(Identifiers.send.Lua_Disable, ByteArray().writeBoolean(self.room.disableWatchCommand).writeBoolean(self.room.disableDebugCommand).writeBoolean(self.room.disableMinimalistMode).toByteArray())
     
     def disablePhysicalConsumables(self, status=True):
-        self.room.disablePhysicalConsumables = status
+        self.room.roomDetails[2] = status
     
     def displayParticle(self, particleType, xPosition, yPosition, xSpeed=0, ySpeed=0, xAcceleration=0, yAcceleration=0, targetPlayer=""):
         packet = ByteArray()
@@ -1038,11 +1038,11 @@ class Lua:
     def setRoomMaxPlayers(self, maxPlayers):
         if self.CheckPerms("tfm.exec.setRoomMaxPlayers") == True:
             if maxPlayers > 0:
-                self.room.maxPlayers = maxPlayers
+                self.room.roomDetails[8] = maxPlayers
 
     def setRoomPassword(self, password):
         if self.CheckPerms("tfm.exec.setRoomPassword"):
-            self.room.roomPassword = password if len(password) > 0 else ""
+            self.room.roomDetails[10] = password if len(password) > 0 else ""
 
     def setShaman(self, target, makeAShaman=True):
         player = self.room.clients.get(Utils.parsePlayerName(target))

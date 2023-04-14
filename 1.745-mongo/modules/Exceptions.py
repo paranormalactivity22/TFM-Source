@@ -17,8 +17,6 @@ class GameException():
             self.client.sendClientMessage("The player "+playerName+" hasn't logged in since the last reboot.", 1)
         elif ExceptionType == "notallowedlua":
             self.client.sendLuaMessage(f"[<V>{self.client.roomName}</V>] [{self.client.playerName}] You're not allowed to use the function {functionName}.")
-        elif ExceptionType == "norecordsfound":
-            self.client.sendClientMessage("The map isn't have a record.", 1)
         elif ExceptionType == "useralreadybanned":
             self.client.sendClientMessage("Player ["+playerName+"] is already banned, please wait.", 1)
         elif ExceptionType == "usernotbanned":
@@ -27,6 +25,8 @@ class GameException():
             self.client.sendClientMessage("Player ["+playerName+"] is already muted, please wait.", 1)
         elif ExceptionType == "usernotmuted":
             self.client.sendClientMessage("The player "+playerName+" is not muted.", 1)
+        elif ExceptionType == "norecordfound":
+            self.client.sendClientMessage("The map "+playerName+" don't have a record.", 1)
         return
         
 class ServerException():

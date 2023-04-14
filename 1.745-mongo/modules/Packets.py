@@ -55,7 +55,7 @@ class Packets:
             if isinstance(data, (bytes, bytearray)):
                 data = data.decode()
             await self.parsePacketUTF(data)
-            
+
         @self.packet(args=['readInt'])
         async def Object_Sync(self, roundCode):
             if roundCode == self.client.room.lastRoundCode:
@@ -67,7 +67,6 @@ class Packets:
                     if code != 1:
                         p.writeBytes(self.packet.readUTFBytes(18)).writeBoolean(True)
                 self.client.room.sendAllOthers(self.client, Identifiers.send.Sync, p.toByteArray())
-
 
         @self.packet(args=['readInt', 'readBoolean', 'readBoolean', 'readInt', 'readInt', 'readShort', 'readShort', 'readBoolean', 'readShort'])
         async def Mouse_Movement(self, a, e, e2, posX, posY, velX, velY, jump, idk):
@@ -91,8 +90,7 @@ class Packets:
             self.client.velX, self.client.velY, self.client.isJumping = velX, velY, jump
             self.client.room.sendAllOthers(self.client, Identifiers.send.Player_Movement, packet2)
 
- 
-        @self.packet(args=['readInt', 'readByte']) ####################
+        @self.packet(args=['readInt', 'readByte'])
         async def Mort(self, roundCode, loc_1):
             if roundCode == self.client.room.lastRoundCode:
                 self.client.isDead = True
@@ -112,29 +110,28 @@ class Packets:
                 if not self.client.room.currentShamanName == "":
                     player = self.client.room.clients.get(self.client.room.currentShamanName)
 
-                    if player != None and not self.client.room.noShamanSkills:
+                    if player != None and not self.client.room.roomDetails[1]:
                         if player.bubblesCount > 0:
                             if self.client.room.getAliveCount() != 1:
                                 player.bubblesCount -= 1
                                 self.client.sendPlaceObject(self.client.room.objectID + 2, 59, self.client.posX, 450, 0, 0, 0, True, True)
 
-                        if player.desintegration and not self.client.room.noShamanSkills:
+                        if player.desintegration and not self.client.room.roomDetails[1]:
                             self.client.Skills.sendSkillObject(6, self.client.posX, 395, 0)
                 self.client.room.checkChangeMap()
-    
+
         @self.packet(args=['readBoolean'])
         async def Player_Position(self, direction):
             self.client.room.sendAll(Identifiers.send.Player_Position, ByteArray().writeInt(self.client.playerCode).writeBoolean(direction).toByteArray())
-            
+
         @self.packet(args=['readBoolean'])
         async def Shaman_Position(self, direction):
             self.client.room.sendAll(Identifiers.send.Shaman_Position, ByteArray().writeInt(self.client.playerCode).writeBoolean(direction).toByteArray())
-    
+
         @self.packet(args=['readByte'])
         async def Crouch(self, crouch_type):
             self.client.room.sendAll(Identifiers.send.Crouch, ByteArray().writeInt(self.client.playerCode).writeByte(crouch_type).writeByte(0).toByteArray())
-    
-    
+
         @self.packet(args=['readShort', 'readShort', 'readShort', 'readShort'])
         async def Map_26(self, posX, posY, width, height):
             if self.client.room.currentMap == 26:
@@ -143,8 +140,8 @@ class Packets:
                 bodyDef["width"] = width
                 bodyDef["height"] = height
                 self.client.room.addPhysicObject(-1, posX, posY, bodyDef)
-                
-        @self.packet(args=['readInt','readInt','readInt'])
+
+        @self.packet(args=['readInt','readInt','readInt']) #####################
         async def Bulle(self, bulle_id, timestamp, playerID):
             playerName = self.client.server.getPlayerName(playerID)
             if timestamp != int(_time.time() / 100): return self.client.transport.close()
@@ -155,36 +152,36 @@ class Packets:
             else:
                 self.client.transport.close()
             return
-        
+
         @self.packet(args=['readByte', 'readShort', 'readShort'])
         async def Shaman_Message(self, type, x, y):
             self.client.room.sendAll(Identifiers.send.Shaman_Message, ByteArray().writeByte(type).writeShort(x).writeShort(y).toByteArray())
 
         @self.packet(args=['readInt'])
         async def Convert_Skill(self, objectID):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendConvertSkill(objectID)
-        
+
         @self.packet(args=['readInt'])
         async def Demolition_Skill(self, objectID):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendDemolitionSkill(objectID)
-        
+
         @self.packet(args=['readShort', 'readShort', 'readShort'])
         async def Projection_Skill(self, posX, posY, _dir):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendProjectionSkill(posX, posY, _dir)
-            
+
         @self.packet(args=['readByte', 'readInt', 'readInt', 'readShort', 'readShort', 'readShort'])
         async def Enter_Hole(self, holeType, roundCode, monde, distance, holeX, holeY):
             if roundCode == self.client.room.lastRoundCode and (self.client.room.currentMap == -1 or monde == self.client.room.currentMap or self.client.room.EMapCode != 0):
                 await self.client.playerWin(holeType, distance)
-        
+
         @self.packet(args=['readInt', 'readShort', 'readShort', 'readShort'])
         async def Get_Cheese(self, roundCode, cheeseX, cheeseY, distance):
             if roundCode == self.client.room.lastRoundCode:
                 self.client.sendGiveCheese(distance)
-        
+
         @self.packet(args=['readByte', 'readInt', 'readShort', 'readShort', 'readShort', 'readShort', 'readByte', 'readByte', 'readBoolean', 'readBoolean'])
         async def Place_Object(self, roundCode, objectID, code, px, py, angle, vx, vy, dur, origin):
             if not self.client.isShaman:
@@ -197,7 +194,7 @@ class Packets:
                     self.client.tempTotem[1] += "#2#" + chr(1).join(map(str, [code, px, py, angle, vx, vy, int(dur)]))
             else:
                 if code == 44:
-                    if not self.client.useTotem and not self.client.room.noShamanSkills:
+                    if not self.client.useTotem and not self.client.room.roomDetails[1]:
                         self.client.sendTotem(self.client.totem[1], px, py, self.client.playerCode)
                         self.client.useTotem = True
 
@@ -212,7 +209,7 @@ class Packets:
                 data["angle"] = angle
                 data["ghost"] = not dur
                 self.client.room.luaRuntime.emit("SummoningEnd", (self.client.playerName, code, px, py, angle, vx, vy, data))
-        
+
         @self.packet(args=['readInt', 'readShort', 'readShort'])
         async def Ice_Cube(self, playerCode, px, py):
             if self.client.isShaman and not self.client.isDead and not self.client.room.isSurvivor and self.client.room.numCompleted > 1:
@@ -225,80 +222,95 @@ class Packets:
                             self.client.sendPlaceObject(self.client.room.objectID + 2, 54, px, py, 0, 0, 0, True, True)
                             self.client.iceCount -= 1
                             self.client.room.checkChangeMap()
-        
+
         @self.packet(args=['readShort'])
         async def Bridge_Break(self, bridgeCode):
             if self.client.room.currentMap in [6, 10, 110, 116]:
                 self.client.room.sendAllOthers(self.client, Identifiers.send.Bridge_Break, ByteArray().writeShort(bridgeCode).toByteArray())
-        
+
         @self.packet(args=['readInt'])
         async def Defilante_Points(self, something):
             self.client.defilantePoints += 1
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("PlayerBonusGrabbed", (self.client.playerName, something))
-        
+
         @self.packet(args=['readInt', 'readInt'])
         async def Restorative_Skill(self, objectID, id):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendRestorativeSkill(objectID, id)
-        
+
         @self.packet(args=['readShort'])
         async def Recycling_Skill(self, id):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendRecyclingSkill(id)
-            
+
         @self.packet(args=['readInt', 'readInt'])
         async def Gravitational_Skill(self, velX, velY):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendGravitationalSkill(0, velX, velY)
 
         @self.packet(args=['readInt'])
         async def Antigravity_Skill(self, objectID):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendAntigravitySkill(objectID)
 
         @self.packet(args=['readByte', 'readInt'])
         async def Handymouse_Skill(self, handyMouseByte, objectID):
-            if self.client.room.noShamanSkills: return
-            if self.client.room.lastHandymouse[0] == -1:
-                self.client.room.lastHandymouse = [objectID, handyMouseByte]
-            else:
-                self.client.Skills.sendHandymouseSkill(handyMouseByte, objectID)
-                self.client.room.sendAll(Identifiers.send.Skill, chr(77) + chr(1))
-                self.client.room.lastHandymouse = [-1, -1]
-                
-        @self.packet(args=['readUTF', 'readUTF']) # here gets the data when create a room.
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
+                if self.client.room.lastHandymouse[0] == -1:
+                    self.client.room.lastHandymouse = [objectID, handyMouseByte]
+                else:
+                    self.client.Skills.sendHandymouseSkill(handyMouseByte, objectID)
+                    self.client.room.sendAll(Identifiers.send.Skill, chr(77) + chr(1))
+                    self.client.room.lastHandymouse = [-1, -1]
+
+        @self.packet(args=['readUTF', 'readUTF'])
         async def Enter_Room(self, community, roomName):
             if self.client.playerName in ["", " "]:
                 self.client.transport.close()
             else:
                 if not roomName == self.client.roomName or not self.client.room.isEditor or not len(roomName) > 64 or not self.client.roomName == "%s-%s" %(self.client.langue, roomName):
-                    if self.client.privLevel < 7: 
-                        roomName = self.server.checkRoom(roomName, self.client.langue)
                     if roomName == "":
                         roomName = self.server.recommendRoom(self.client.langue)
+                    elif self.client.privLevel < 7:
+                        roomName = self.server.checkRoom(roomName, self.client.langue)
                     roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
                     if roomEnter == None or self.client.privLevel >= 7:
                         self.client.sendBulle(roomName)
                         self.client.enterRoom(roomName)
                         if self.packet.bytesAvailable():
                             roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
-                            roomEnter.isCustomRoom = True
-                            self.packet.readByte()
-                            roomEnter.roomPassword = self.packet.readUTF()
-                            roomEnter.noShamanSkills = self.packet.readBoolean()
-                            roomEnter.disablePhysicalConsumables = self.packet.readBoolean()
-                            roomEnter.noAdventureMap = self.packet.readBoolean()
-                            roomEnter.isMiceCollisions = self.packet.readBoolean()
-                            roomEnter.isFallDamage = self.packet.readBoolean()
-                            roomEnter.roundDuration = self.packet.readByte()
-                            roomEnter.miceWeight = self.packet.readInt()
-                            roomEnter.maxPlayers = self.packet.readShort()
+                            mapRotation = []
+                            """
+                            0 - Does contains more details?
+                            1 - Are shaman skills disabled?
+                            2 - Are Physical Consumables disabled?
+                            3 - Is adventure map disabled?
+                            4 - Is mice collisions disabled?
+                            5 - Is fall damage effect disabled?
+                            6 - Round duration
+                            7 - Mice weight
+                            8 - Maximum players
+                            9 - Map rotation
+                            10 - Room Password
+                            """
                             x = self.packet.readByte()
-                            while self.packet.bytesAvailable(): roomEnter.mapRotation.append(self.packet.readByte())
-                            self.client.sendPacket(Identifiers.send.Room_Info_Message, ByteArray().writeBoolean(roomEnter.noShamanSkills).writeBoolean(roomEnter.disablePhysicalConsumables).writeBoolean(roomEnter.noAdventureMap).writeBoolean(roomEnter.isMiceCollisions).writeBoolean(roomEnter.isFallDamage).writeByte(roomEnter.roundDuration).writeInt(roomEnter.miceWeight).writeShort(roomEnter.maxPlayers).writeByte(x).writeBytes(roomEnter.mapRotation).toByteArray())
+                            roomEnter.roomDetails[10] = self.packet.readUTF()
+                            roomEnter.roomDetails[1] = self.packet.readBoolean()
+                            roomEnter.roomDetails[2] = self.packet.readBoolean()
+                            roomEnter.roomDetails[3] = self.packet.readBoolean()
+                            roomEnter.roomDetails[4] = self.packet.readBoolean()
+                            roomEnter.roomDetails[5] = self.packet.readBoolean()
+                            roomEnter.roomDetails[6] = self.packet.readByte()
+                            roomEnter.roomDetails[7] = self.packet.readInt()
+                            roomEnter.roomDetails[8] = self.packet.readShort()
+                            x2 = self.packet.readByte()
+                            while self.packet.bytesAvailable(): mapRotation.append(self.packet.readByte())
+                            roomEnter.roomDetails[9] = mapRotation
+                            roomEnter.roomDetails[0] = True if (roomEnter.roomDetails[1] or roomEnter.roomDetails[2] or roomEnter.roomDetails[3] or roomEnter.roomDetails[4] or roomEnter.roomDetails[5] or roomEnter.roomDetails[6] not in [0, 100] or roomEnter.roomDetails[7] > 0 or roomEnter.roomDetails[8] > 0 or len(roomEnter.roomDetails[9]) > 0) else False
+                            self.client.sendPacket(Identifiers.send.Room_Info_Message, ByteArray().writeBoolean(roomEnter.roomDetails[1]).writeBoolean(roomEnter.roomDetails[2]).writeBoolean(roomEnter.roomDetails[3]).writeBoolean(roomEnter.roomDetails[4]).writeBoolean(roomEnter.roomDetails[5]).writeByte(roomEnter.roomDetails[6]).writeInt(roomEnter.roomDetails[7]).writeShort(roomEnter.roomDetails[8]).writeByte(x2).writeBytes(roomEnter.roomDetails[9]).toByteArray())
                     else:
-                        if roomEnter.roomPassword != "":
+                        if roomEnter.roomDetails[10] != "":
                             self.client.sendPacket(Identifiers.send.Room_Password, ByteArray().writeUTF(roomName).toByteArray())
                         else:
                             self.client.startBulle(roomName)
@@ -309,11 +321,11 @@ class Packets:
             if roomEnter == None or self.client.privLevel >= 7:
                 self.client.startBulle(roomName)
             else:
-                if not roomEnter.roomPassword == roomPass:
+                if not roomEnter.roomDetails[10] == roomPass:
                     self.client.sendPacket(Identifiers.send.Room_Password, ByteArray().writeUTF(roomName).toByteArray())
                 else:
                     self.client.startBulle(roomName)
-        
+
         @self.packet(args=['readUTF'])
         async def Chat_Message(self, message):
             message = message.replace("&amp;#", "&#").replace("<", "&lt;")
@@ -321,11 +333,11 @@ class Packets:
                 self.client.sendLangueMessage("", "$Créer_Compte_Parler")
                 return
                 
-            elif message == "!lb":
+            elif message == "!lb" and self.client.room.isFastRacing:
                 self.client.sendLeaderBoard()
                 return
                 
-            elif message == "!listrec":
+            elif message == "!listrec" and self.client.room.isFastRacing:
                 await self.client.sendPlayerRecords()
                 return
                 
@@ -376,19 +388,19 @@ class Packets:
                     
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("ChatMessage", (self.client.playerName, message))
-        
+
         @self.packet(args=['readByte', 'readUTF'])
         async def Staff_Chat(self, type, message):
             if self.client.privLevel < 2:
                 return
             self.client.sendAllModerationChat(type, message)
-        
+
         @self.packet(args=['readUTF'])
         async def Commands(self, command):
             if _time.time() - self.client.CMDTime > 1:
                 await self.client.Commands.parseCommand(command)
                 self.client.CMDTime = _time.time()
-        
+
         @self.packet(args=['readByte', 'readInt', 'readUTF'])
         async def Player_Emote(self, emoteID, playerCode, flag=''):
             self.client.sendPlayerEmote(emoteID, flag, True, False)
@@ -426,21 +438,21 @@ class Packets:
                         player.sendPlayerEmote(27, flag, False, False)
                         self.client.room.sendAll(Identifiers.send.Joquempo, ByteArray().writeInt(self.client.playerCode).writeByte(random.randint(0, 2)).writeInt(player.playerCode).writeByte(random.randint(0, 2)).toByteArray())
 
-            if self.client.isShaman and not self.client.room.noShamanSkills:
+            if self.client.isShaman and not self.client.room.roomDetails[1]:
                 self.client.Skills.parseEmoteSkill(emoteID)
             
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("EmotePlayed", (self.client.playerName, emoteID))
-            
+
         @self.packet(args=['readByte'])
         async def Player_Emotions(self, emotionID):
             self.client.sendEmotion(emotionID)
-            
+
         @self.packet(args=['readBoolean'])
         async def Player_Shaman_Fly(self, fly):
-            if not self.client.room.noShamanSkills:
+            if self.client.room.roomDetails[1] == False and self.client.isNoShamanSkills == False:
                 self.client.Skills.sendShamanFly(fly)
-        
+
         @self.packet
         async def Player_Shop_List(self):
             self.client.Shop.sendShopList(True)
@@ -448,7 +460,7 @@ class Packets:
         @self.packet(args=['readByte'])
         async def Player_Buy_Skill(self, skill):
             self.client.Skills.buySkill(skill)
-            
+
         @self.packet
         async def Player_Redistribute(self):
             self.client.Skills.redistributeSkills()
@@ -456,7 +468,7 @@ class Packets:
         @self.packet(args=['readUTF', 'readByte', 'readUTF'])
         async def Player_Report(self, playerName, type, comments):
             self.client.modoPwet.makeReport(playerName, type, comments)
-        
+
         @self.packet(args=['readByte'])
         async def Player_Ping1(self, ping):
             if (_time.time() - self.client.PInfo[1]) >= 5:
@@ -465,19 +477,19 @@ class Packets:
                 self.client.PInfo[0] += 1
                 if self.client.PInfo[0] == 31:
                     self.client.PInfo[0] = 0
-                    
+
         @self.packet(args=['readShort', 'readShort'])
         async def Player_Meep(self, posX, posY):
             self.client.room.sendAll(Identifiers.send.Meep_IMG, ByteArray().writeInt(self.client.playerCode).toByteArray())
             self.client.room.sendAll(Identifiers.send.Meep, ByteArray().writeInt(self.client.playerCode).writeShort(posX).writeShort(posY).writeInt(10 if self.client.isShaman else 5).toByteArray())
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("PlayerMeep", (self.client.playerName))
-        
+
         @self.packet
         async def Player_Vampire(self):
             self.client.sendVampireMode(True)
-            
-        @self.packet(args=['readUTF'])
+
+        @self.packet(args=['readUTF']) #################
         async def Player_Calendar(self, playerName):
             player = self.server.players.get(playerName)
             if player != None:
@@ -517,8 +529,7 @@ class Packets:
                         p.writeShort(items[1])
                         p.writeInt(self.server.getAventureItems(playerName, aventure, int(items[0]), int(items[1])))
                 self.client.sendPacket(Identifiers.send.Adventures, p.toByteArray())
-            
-            
+
         @self.packet
         async def Tribe_House(self):
             if not self.client.tribeName == "":
@@ -537,27 +548,27 @@ class Packets:
         @self.packet(args=['readByte'])
         async def Equip_Clothe(self, _id):
             self.client.Shop.equipClothe(_id)
-                    
+
         @self.packet(args=['readByte'])
         async def Save_Clothe(self, _id):
             self.client.Shop.saveClothe(_id)
-                    
+
         @self.packet
         async def Shop_Info(self):
             self.client.Shop.sendShopInfo()
-                
+
         @self.packet(args=['readInt'])
         async def Equip_Item(self, _id):
             self.client.Shop.equipItem(_id)
-            
+
         @self.packet(args=['readInt', 'readBoolean'])
         async def Equip_Item(self, _id, status):
             self.client.Shop.buyItem(_id, status)
-        
+
         @self.packet(args=['readInt', 'readBoolean'])
         async def Buy_Item(self, _id, status):
            self.client.Shop.buyItem(_id, status)
-          
+
         @self.packet(args=['readInt', 'readBoolean'])
         async def Buy_Custom(self, _id, status):
             self.client.Shop.customItemBuy(_id, status)
@@ -574,7 +585,7 @@ class Packets:
         @self.packet(args=['readByte', 'readBoolean'])
         async def Buy_Clothe(self, _id, status):
             self.client.Shop.buyClothe(_id, status)
-            
+
         @self.packet(args=['readShort', 'readUTF'])
         async def Buy_Full_Look_Confirm(self, _id, status):
             self.client.Shop.buyFullLookConfirm(_id, status)
@@ -607,7 +618,7 @@ class Packets:
         @self.packet(args=['readInt', 'readBoolean', 'readUTF', 'readBoolean'])
         async def Gift_result(self, giftID, isOpen, message, isMessage):
             self.client.Shop.giftResult(giftID, isOpen, message, isMessage)
-        
+
         @self.packet(args=['readBoolean'])
         async def Modopwet(self, isOpen):
             if self.client.privLevel >= 7:
@@ -621,7 +632,8 @@ class Packets:
 
         @self.packet(args=['readUTF', 'readByte'])
         async def Delete_Report(self, playerName, closeType):
-            self.client.modoPwet.deleteReport(playerName, closeType)
+            if self.client.privLevel >= 7:
+                self.client.modoPwet.deleteReport(playerName, closeType)
 
         @self.packet(args=['readUTF', 'readByte'])
         async def Watch(self, playerName, isWatching):
@@ -644,7 +656,7 @@ class Packets:
                                 self.server.players[playerName].followed = None
                         else:
                             self.client.enterRoom(roomName)
-        
+
         @self.packet(args=['readUTF', 'readBoolean'])
         async def Ban_Hack(self, playerName, silent):
             if self.client.privLevel >= 7:
@@ -657,7 +669,7 @@ class Packets:
                 self.client.sendPacket(Identifiers.send.Modopwet_Update_Language)
                 if reOpen:
                     self.client.modoPwet.openModoPwet(self.client.isModoPwet, modopwetOnlyPlayerReports, sortBy)
-                
+
         @self.packet(args=['readBoolean', 'readByte'])
         async def Modopwet_Notifications(self, isTrue, leng):
             if self.client.privLevel >= 7:
@@ -670,7 +682,8 @@ class Packets:
 
         @self.packet(args=['readUTF'])
         async def Chat_Log(self, playerName):
-            self.client.modoPwet.openChatLog(playerName)
+            if self.client.privLevel >= 7:
+                self.client.modoPwet.openChatLog(playerName)
 
         @self.packet(args=['readUTF', 'readUTF', 'readUTF', 'readUTF'])
         async def Create_Account(self, playerName, password, email, captcha):
@@ -694,7 +707,7 @@ class Packets:
             else:
                 self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(5).writeByte(0).writeByte(0).writeUTF(playerName).toByteArray())
 
-        @self.packet(args=['readUTF','readUTF','readUTF','readUTF','readInt'])
+        @self.packet(args=['readUTF','readUTF','readUTF','readUTF','readInt']) ##################
         async def Login(self, playerName, password, url, startRoom, resultKey):
             # Login Keys
             if len(self.server.loginKeys) > 0:
@@ -719,8 +732,6 @@ class Packets:
                 self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(2).writeUTF(playerName).writeUTF("").toByteArray())
             else:
                 await self.client.loginPlayer(playerName, password, startRoom)
-                
-        
 
         @self.packet(args=['readUTF'])
         async def New_Survey(self, description):
@@ -746,7 +757,7 @@ class Packets:
                         player.sendPacket(Identifiers.send.Survey, packet2.toByteArray())
             else:
                 self.client.sendClientMessage("Your survey must require one option.", True)
-                
+
         @self.packet(args=['readInt', 'readByte'])
         async def Survey_Answer(self, playerID, optionID):
             for player in self.server.players.copy().values():
@@ -775,7 +786,6 @@ class Packets:
             self.client.currentCaptcha = random.choice(list(self.server.captchaList))
             self.client.sendPacket(Identifiers.send.Captcha, self.server.captchaList[self.client.currentCaptcha][0])
 
-
         @self.packet
         async def Player_MS(self):
             self.client.sendPacket(Identifiers.send.Player_MS)
@@ -788,7 +798,7 @@ class Packets:
         @self.packet(args=['readUTF'])
         async def Temps_Client(self, temps):
             self.client.sendPacket(Identifiers.send.Temps_Client, ByteArray().writeUTF(temps).toByteArray())
-            
+
         @self.packet(args=['readShort'])
         async def Player_Info(self, info):
             self.client.sendPacket(Identifiers.send.Player_Info, ByteArray().writeByte(0).writeUTF(info).toByteArray())
@@ -802,16 +812,15 @@ class Packets:
             self.client.lastGameMode = mode
             self.client.sendGameMode(mode)
 
-        @self.packet
-        async def Request_Info(self):
-            self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray()) # ?
-                
+        #@self.packet
+        #async def Request_Info(self): ####################
+            #self.client.sendPacket(Identifiers.send.Tribulle_Token, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray())
+
         @self.packet(args=['readShort'])
         async def Transformation_Object(self, objectID):
-            if (not self.client.isDead and self.client.room.currentMap in self.client.room.transformationMaps) or self.client.room.isFuncorp or self.client.hasLuaTransformations:
+            if not self.client.isDead and (self.client.room.currentMap in self.client.room.transformationMaps or self.client.room.isFuncorp or self.client.hasLuaTransformations):
                 self.client.room.sendAll(Identifiers.send.Transformation, ByteArray().writeInt(self.client.playerCode).writeShort(objectID).toByteArray())
 
-            
         @self.packet(args=['readByte', 'readByte', 'readUnsignedByte', 'readUnsignedByte', 'readUTF'])
         async def Game_Log(self, errorC, errorCC, oldC, oldCC, error):
             if self.server.isDebug:
@@ -838,8 +847,8 @@ class Packets:
                     with open("./include/logs/Errors/Debug.log", "a") as f:
                         f.write("[%s] [%s] GameLog Error - Func: %s C: %s CC: %s error: %s\n" %(_time.strftime("%H:%M:%S"), self.client.playerName, testfunc, errorC, errorCC, error))
                     f.close()
-            
-        @self.packet(args=['readByte'])
+
+        @self.packet(args=['readByte']) ##################
         async def Player_Ping(self, VC):
             if self.client.PInfo[0] == VC + 1:
                 self.client.PInfo[2] = int((_time.time() - self.client.PInfo[1])*1000)
@@ -862,49 +871,46 @@ class Packets:
                     
                 self.client.sendPacket(Identifiers.send.Use_Inventory_Consumable, ByteArray().writeInt(self.client.playerCode).writeShort(consumables[type_letter]).toByteArray())
                 self.client.sendUpdateInventoryConsumable(consumables[type_letter], count)
-                
-            player = self.server.players.get(playerName)
-            if (player != None):
-                p = ByteArray()
-                p.writeUTF(self.client.playerName)
-                p.writeUTF(self.client.playerLook)
-                p.writeByte(type)
-                p.writeBytes(letters)
-                player.sendPacket(Identifiers.send.Letter, p.toByteArray())
-                self.client.sendLangueMessage("", "$MessageEnvoye")
-            else:
-                playerID = self.server.getPlayerID(playerName)
-                hashed_letters = self.Cursor['users'].find_one({'PlayerID':playerID})['Letters']
-                if playerID != -1:
-                    hashed_letters += ("" if len(hashed_letters) == 0 else "$") + "|".join(map(str, [self.client.playerName, str(int(self.client.mouseColor, 16)) + "##" + str(self.client.playerLook), type_letter, base64.b64encode(zlib.compress(letters)).decode()]))
-                    self.Cursor['users'].update_one({'PlayerID':playerID},{'$set':{'Letters':hashed_letters}})
+
+                player = self.server.players.get(playerName)
+                if (player != None):
+                    p = ByteArray()
+                    p.writeUTF(self.client.playerName)
+                    p.writeUTF(self.client.playerLook)
+                    p.writeByte(type)
+                    p.writeBytes(letters)
+                    player.sendPacket(Identifiers.send.Letter, p.toByteArray())
+                    self.client.sendLangueMessage("", "$MessageEnvoye")
                 else:
-                    self.client.sendLangueMessage("", "$Joueur_Existe_Pas")
+                    playerID = self.server.getPlayerID(playerName)
+                    hashed_letters = self.Cursor['users'].find_one({'PlayerID':playerID})['Letters']
+                    if playerID != -1:
+                        hashed_letters += ("" if len(hashed_letters) == 0 else "$") + "|".join(map(str, [self.client.playerName, str(int(self.client.mouseColor, 16)) + "##" + str(self.client.playerLook), type_letter, base64.b64encode(zlib.compress(letters)).decode()]))
+                        self.Cursor['users'].update_one({'PlayerID':playerID},{'$set':{'Letters':hashed_letters}})
+                    else:
+                        self.client.sendLangueMessage("", "$Joueur_Existe_Pas")
 
         @self.packet
         async def Send_gift(self):
             self.client.sendPacket(Identifiers.send.Send_gift, ByteArray().writeByte(1).toByteArray())
-                
+
         @self.packet(args=['readUTF', 'readUTF', 'readUTF'])
         async def Computer_Info(self, info, os_type, os_version):
             self.client.computerLanguage = info
             self.client.computerOS = os_type
             self.client.computerOSVersion = os_version
             self.client.canLogin[0] = True if len(info) > 0 and len(os_type) > 0 and len(os_version) > 0 else False
-            
+
         @self.packet(args=['readInt'])
         async def Change_Shaman_Color(self, color):
             color = packet.readInt()
             self.client.shamanColor = "%06X" %(0xFFFFFF & color)
-            
+
         @self.packet
-        async def Tribulle_API(self):
-            self.client.sendPacket(Identifiers.send.Tribulle_Token, ByteArray().writeUTF("https://disneyclient.com/info.php").toByteArray())
-            
-        @self.packet
-        async def Lua_Script(self):
+        async def Lua_Script(self): #################
             script = self.packet.readUTFBytes(int.from_bytes(self.packet.read(3),'big')).decode()
-            if(self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp) or self.server.isDebug:
+            if True:
+            #if(self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp) or self.server.isDebug:
                 if not self.client.isLuaAdmin:
                     if self.client.room.luaRuntime == None:
                         self.client.room.luaRuntime = Lua(self.client.room, self.server)
@@ -912,7 +918,7 @@ class Packets:
                     self.client.room.luaRuntime.RunCode(script)
                 else: self.client.runLuaScript(script)
 
-        @self.packet(args=['readShort', 'readBoolean', 'readShort', 'readShort', 'readShort', 'readShort'])
+        @self.packet(args=['readShort', 'readBoolean', 'readShort', 'readShort', 'readShort', 'readShort']) #################
         async def Key_Board(self, key, down, posX, posY, xPlayerVelocity, yPlayerVelocity):
             if self.client.room.isBootcamp and key == 71:
                 if not self.client.isDead:
@@ -921,45 +927,45 @@ class Packets:
                     self.client.sendPlayerDied()
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("Keyboard", (self.client.playerName, key, down, posX, posY, xPlayerVelocity, yPlayerVelocity))
-            
-        @self.packet(args=['readShort', 'readShort'])
+
+        @self.packet(args=['readShort', 'readShort']) #################
         async def Mouse_Click(self, posX, posY):                 
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("Mouse", (self.client.playerName, posX, posY))
 
-        @self.packet(args=['readInt', 'readUTF'])
+        @self.packet(args=['readInt', 'readUTF']) #################
         async def Popup_Answer(self, popupID, answer):
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("PopupAnswer", (popupID, self.client.playerName, answer))
-        
+
         @self.packet(args=['readInt', 'readUTF'])
-        async def Text_Area_Callback(self, textAreaID, event):
+        async def Text_Area_Callback(self, textAreaID, event): #################
             if event in ["lbileri","lbgeri","lbkapat"]:
                 self.client.lbSayfaDegis(event=="lbileri", event=="lbkapat")
                 return 
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("TextAreaCallback", (textAreaID, self.client.playerName, event))
 
-        @self.packet(args=['readInt', 'readUTF', 'readInt', 'readUTF'])
+        @self.packet(args=['readInt', 'readUTF', 'readInt', 'readUTF']) #################
         async def Color_Picked(self, colorPickerId, player, color, title):
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("ColorPicked", (colorPickerId, player, color))
-        
+
         @self.packet
         async def Reload_Cafe(self):
             if not self.client.isReloadCafe:
                 await self.client.Cafe.loadCafeMode()
                 self.client.isReloadCafe = True
                 self.server.loop.call_later(2, setattr, self.client, "isReloadCafe", False)
-        
+
         @self.packet(args=['readInt'])
         async def Open_Cafe_Topic(self, topicID):
             await self.client.Cafe.openCafeTopic(topicID)
-            
+
         @self.packet(args=['readUTF', 'readUTF'])
         async def Create_New_Cafe_Topic(self, message, title):
             await self.client.Cafe.createNewCafeTopic(message, title)
-        
+
         @self.packet(args=['readInt', 'readUTF'])
         async def Create_New_Cafe_Post(self, topicID, message):
             await self.client.Cafe.createNewCafePost(topicID, message)
@@ -1025,7 +1031,7 @@ class Packets:
                 self.client.room.never20secTimer = True
                 self.client.room.sendAll(Identifiers.send.Mulodrome_End)
                 await self.client.room.mapChange()
-        
+
         @self.packet
         async def Open_Inventory(self):
             self.client.sendInventoryConsumables()
@@ -1033,7 +1039,7 @@ class Packets:
         @self.packet(args=['readShort'])
         async def Use_Consumable(self, id):
             self.client.useConsumable(id)
-            
+
         @self.packet(args=['readShort', 'readBoolean'])
         async def Equip_Consumable(self, id, equip):
             if equip:
@@ -1046,11 +1052,11 @@ class Packets:
         @self.packet(args=['readUTF'])
         async def Trade_Invite(self, playerName):
             self.client.tradeInvite(playerName)
-                
+
         @self.packet(args=['readUTF'])
         async def Cancel_Trade(self, playerName):
             self.client.cancelTrade(playerName)
-            
+
         @self.packet(args=['readShort', 'readBoolean'])
         async def Trade_Add_Consusmable(self, id, isAdd):
             self.client.tradeAddConsumable(id, isAdd)
@@ -1058,7 +1064,6 @@ class Packets:
         @self.packet(args=['readBoolean'])
         async def Trade_Result(self, isAccept):
                 self.client.tradeResult(isAccept)
-
 
         @self.packet(args=['readShort'])
         async def Tribulle(self, code):
@@ -1072,7 +1077,7 @@ class Packets:
                 self.client.langue = self.client.langue.split("-")[1]
             self.client.langueID = Utils.getLangueID(self.client.langue)
             self.client.sendPacket(Identifiers.send.Set_Language, ByteArray().writeUTF(langue).writeUTF(self.server.langs.get(self.client.langue.lower())[1]).writeShort(0).writeBoolean(False).writeBoolean(True).writeUTF('').toByteArray())
-        
+
         @self.packet
         async def Language_List(self):
             data = ByteArray().writeShort(len(self.server.langs)).writeUTF(self.client.langue.lower())
@@ -1085,9 +1090,9 @@ class Packets:
                     data.writeUTF(info[1])
                     data.writeUTF(info[2])
             self.client.sendPacket(Identifiers.send.Language_List, data.toByteArray())
-            
+
         @self.packet()
-        async def BotProtection(self):
+        async def BotProtection(self): #############
             self.packet.decryptIdentification(self.server.packetKeys, str(self.client.verifycoder).encode())
             code = self.packet.readInt()
             self.client.canLogin[1] = (code != self.client.verifycoder)
@@ -1097,7 +1102,7 @@ class Packets:
             if partner == "DisneyClient":
                 self.client.sendPacket(Identifiers.send.Open_Link, ByteArray().writeUTF("http://disneyclient.com").toByteArray())
 
-        @self.packet(args=['readShort', 'readShort', 'readShort', 'readShort', 'readUTF', 'readBoolean'])
+        @self.packet(args=['readShort', 'readShort', 'readShort', 'readShort', 'readUTF', 'readBoolean']) #############
         async def Invocation(self, objectCode, posX, posY, rotation, position, invocation):
             if self.client.isShaman:
                 showInvocation = True
@@ -1111,7 +1116,7 @@ class Packets:
                     self.client.room.luaRuntime.emit("SummoningStart", (self.client.playerName, objectCode, posX, posY, rotation))
 
         @self.packet
-        async def Remove_Invocation(self):
+        async def Remove_Invocation(self): #############
             if self.client.isShaman:
                 self.client.room.sendAllOthers(self.client, Identifiers.send.Remove_Invocation, ByteArray().writeInt(self.client.playerCode).toByteArray())
                 if self.client.room.luaRuntime != None:
@@ -1130,10 +1135,6 @@ class Packets:
             else:
                 self.client.buyNPCItem(self.packet.readByte())
 
-        
-            #elif CC == Identifiers.recv.Transformice.Question: 
-            #    pass
-
         @self.packet(args=['readByte'])
         async def Map_Info(self, cheesesCount):
             self.client.room.cheesesList = []
@@ -1150,7 +1151,7 @@ class Packets:
                 holeType, holeX, holeY = self.packet.readShort(), self.packet.readShort(), self.packet.readShort()
                 self.client.room.holesList.append([holeType, holeX, holeY])
                 i += 1
-                
+
         @self.packet(args=['readByte'])
         async def Crazzy_Packet(self, type):
             if type == 2:
@@ -1159,15 +1160,15 @@ class Packets:
                 lineX = int(self.packet.readShort())
                 lineY = int(self.packet.readShort())
                 self.client.room.sendAllOthers(self.client, Identifiers.send.Crazzy_Packet, self.client.getCrazzyPacket(2,[self.client.playerCode, self.client.drawingColor, posX, posY, lineX, lineY]))
-        
+
         @self.packet(args=['readShort'])
         async def Full_Look(self, look):
             self.client.Shop.buyFullLook(str(look))
-            
+
         @self.packet
         async def Open_Missions(self):
             self.client.missions.sendMissions()
-            
+
         @self.packet(args=['readShort'])
         async def Change_Mission(self, missionID):
             self.client.missions.changeMission(str(missionID))
@@ -1184,14 +1185,14 @@ class Packets:
         async def Check_Cafe_Message(self, topicID, delete):
             await self.client.Cafe.CheckMessageType(topicID, delete)
 
-        @self.packet(args=['readByte', 'readByte', 'readInt'])
+        @self.packet(args=['readByte', 'readByte', 'readInt']) ##################
         async def Sonar_System(self, code, key, time):
             if self.client.playerName not in self.server.sonar:
                 return
             if key == 0 and code == 2: return
             chars = {1:"↑ (Last Jump)", 38:"↑",37:"←",39:"→",40:"↓",87:"↑",68:"→",65:"←",83:"↓"}
             self.server.sonar[self.client.playerName].append(f"<BL>{chars[key]}<G> + <V>{time}</V> ms")
-                           
+
         @self.packet(args=['readInt'])
         async def Attach_Player(self, playerCode):
             self.client.room.sendAll(Identifiers.send.SetPositionToAttach, ByteArray().writeByte(-1).toByteArray()) # Detach
@@ -1202,7 +1203,7 @@ class Packets:
             self.client.room.sendAll(Identifiers.send.SetPositionToAttach, ByteArray().writeByte(-1).toByteArray())
 
         @self.packet
-        async def Open_Outfits(self):
+        async def Open_Outfits(self): ##################
             if self.client.privLevel not in [3, 9] and not self.client.isFashionSquad:
                 return
             p = ByteArray()
@@ -1216,7 +1217,7 @@ class Packets:
                 p.writeByte(2 if not int(self.server.shopOutfitsCheck[id][5]) else 3)
             self.client.sendPacket(Identifiers.send.Open_Outfits, p.toByteArray())
 
-        @self.packet(args=['readUTF', 'readShort', 'readUTF', 'readUTF'])
+        @self.packet(args=['readUTF', 'readShort', 'readUTF', 'readUTF']) ##################
         async def Add_Outfit(self, name, bg, date, look):
             if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
                 return
@@ -1229,7 +1230,7 @@ class Packets:
                 self.client.sendClientMessage("Invalid arguments.", 1)
 
         @self.packet(args=['readInt'])
-        async def Remove_Outfit(self, id):
+        async def Remove_Outfit(self, id): ##################
             if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
                 return
             for i in self.server.shopData["fullLooks"]:
@@ -1240,11 +1241,11 @@ class Packets:
             await self.parsePacket(1,149,12,ByteArray())
 
         @self.packet(args=['readUTF'])
-        async def View_Posts(self, playerName):
+        async def View_Posts(self, playerName): ##################
             await self.client.Cafe.ViewCafeMessages(playerName)
 
         @self.packet
-        async def Open_Sales(self):
+        async def Open_Sales(self): ##################
             if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
                 return
             packet = ByteArray()
@@ -1263,8 +1264,8 @@ class Packets:
                 packet.writeEncoded(2) # 2 if is not on shop and 1 if is on shop 
                 x += 1
             self.client.sendPacket(Identifiers.send.Open_Sales, packet.toByteArray())
-             
-        @self.packet(args=['readUTF', 'readUTF', 'readUTF', 'readByte'])
+
+        @self.packet(args=['readUTF', 'readUTF', 'readUTF', 'readByte']) ##################
         async def Add_Sale(self, item_id, starting_date, ending_date, amount):
             if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
                 return
@@ -1275,8 +1276,8 @@ class Packets:
                 return await self.parsePacket(1,149,16,ByteArray())
             else:
                 self.client.sendClientMessage("Invalid arguments", 1)
-            
-        @self.packet(args=['readInt'])
+
+        @self.packet(args=['readInt']) ##################
         async def Remove_Sale(self, id):
             if not self.client.privLevel in [3, 9] and not self.client.isFashionSquad:
                 return
@@ -1292,15 +1293,15 @@ class Packets:
                     break
             self.server.updatePromotions()
             await self.parsePacket(1,149,16,ByteArray())
-            
+
         @self.packet
-        async def Ranking(self):
-            data, sltdat = ByteArray().writeEncoded(1).writeEncoded(69), {}
+        async def Ranking(self): ##################
+            data, sltdat = ByteArray().writeEncoded(1).writeEncoded(10), {}
             for str2 in ["CheeseCount","FirstCount","ShamanCheeses","RacingStats","BootcampCount","SurvivorStats","DefilanteStats"]:
                 sldt, t = {}, 1
-                data.writeEncoded(10)
+                data.writeEncoded(10) # total players
                 for rs in self.Cursor['users'].find().sort(str2,-1):
-                    if isinstance(rs[str2],str): sldt[rs['Username']] = int(rs[str2].split(',')[2])
+                    if isinstance(rs[str2], str): sldt[rs['Username']] = int(rs[str2].split(',')[2])
                     if t < 11:
                         if not isinstance(rs[str2],str): data.writeEncoded(t).writeUTF(rs['Username']).writeEncoded(rs[str2]).writeEncoded(t)
 
@@ -1317,14 +1318,13 @@ class Packets:
                         tr+=1
             
             for str2 in ["CheeseCount","FirstCount","ShamanCheeses","RacingStats","BootcampCount","SurvivorStats","DefilanteStats"]: data.writeEncoded(sltdat[str2][1]).writeEncoded(sltdat[str2][0])
-            self.client.sendPacket([144, 36], data.toByteArray())
+            self.client.sendPacket(Identifiers.send.Ranking, data.toByteArray())
 
             #elif CC == 9: # [144, 19] --> CC -> 9
             #    return
             
 # [Chatta] Packet not implemented - C: 149 - CC: 23 - packet: b'\x00\x00\x00\x00\x01\x00\x00\x00\xc8\x00\x00\x00\x14\x00\x00\x00\x14'
 # [Chatta] Struct Error - C: 176 - CC: 47 - packet: b"\xaa\xe3\x96\xa9BH\x80L\xde\xadq\x1a\xe4\tL\xd5m\x84\xf4\x83<\xf9-'!\xdf\xda\x00I\xcd\xd2j\x1b\xf2\xf4\x00\x97\xa1h\xe0\x8b7\xc4o\xce\xbb\x00zc\xd3\x94\xfe"
-# [Chatta#0001] Struct Error - C: 5 - CC: 38 - packet: b'\x00\x03sex\x01\x01\x01\x01\x012\x00\x00\x00d\x00,\x01\x8a'
 
     async def parsePacketUTF(self, packet):
         values = packet.split('\x01')
