@@ -300,7 +300,7 @@ class Client:
         self.isClosed = True
         if self.ipAddress in self.server.connectedCounts:
             count = self.server.connectedCounts[self.ipAddress] - 1
-            if count < 1:
+            if count <= 0:
                 del self.server.connectedCounts[self.ipAddress]
             else:
                 self.server.connectedCounts[self.ipAddress] = count
@@ -311,14 +311,10 @@ class Client:
                 self.sendPacket(Identifiers.send.Watch, ByteArray().writeUTF("").writeBoolean(False).toByteArray())
                 self.enterRoom(self.lastroom)
                 self.server.players[self.playerName].followed = None
-                del self.server.players[self.playerName]
+            del self.server.players[self.playerName]
                 
             if self.isTrade:
                 self.cancelTrade(self.tradeName)
-
-            if self.playerName in self.server.reports:
-                if not self.server.reports[self.playerName]["state"] in ["banned", "deleted"]:
-                    self.server.reports[self.playerName]["state"] = "disconnected"
 
             if self.playerName in self.server.chatMessages:
                 self.server.chatMessages[self.playerName] = {}
@@ -331,13 +327,17 @@ class Client:
             if self.tribeCode != 0:
                 self.tribulle.sendTribeMemberDisconnected()
 
-            if self.room != None:
-                self.room.removeClient(self)
+            self.updateDatabase()
+            if self.privLevel > 3:
+                self.sendModInfo(0)
 
-            if not self.playerName == "":
-                if not self.isGuest:
-                    self.updateDatabase()
-                    self.sendModInfo(0)
+            if self.playerName in self.server.reports:
+                if not self.server.reports[self.playerName]["state"] in ["banned", "deleted"]:
+                    self.server.reports[self.playerName]["state"] = "disconnected"
+
+        if self.room != None:
+            self.room.removeClient(self)
+
         self.transport.close()
                                                     
     def sendPacket(self, identifiers, data=b""):
