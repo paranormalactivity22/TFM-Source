@@ -338,6 +338,7 @@ class Client:
                 if not self.isGuest:
                     self.updateDatabase()
                     self.sendModInfo(0)
+        self.transport.close()
                                                     
     def sendPacket(self, identifiers, data=b""):
         loop.create_task(self._sendPacket(identifiers, data))
