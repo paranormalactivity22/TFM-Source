@@ -35,7 +35,7 @@ class AntiCheat:
         else: self.s_list = []
            
     def getHack(self, packet):
-        if packet == 55 or packet == 51: 
+        if packet in [51, 55]: 
             return "Speed / Cheat Engine"
         elif packet == 31: 
             return "Fly"
@@ -48,9 +48,9 @@ class AntiCheat:
             if self.server.learning == "true":
                 self.client.sendServerMessage("[Anti-Cheat] I found a new package coming from <BL>"+self.client.playerName+"</BL> (<VP>"+str(packet)+"</VP>)")
                 self.server.s_list.append(str(packet))
-                w = open('./cheat/anticheat_allow', 'a')
-                w.write(str(packet) + ",")
-                w.close()
+                #w = open('./cheat/anticheat_allow', 'a')
+                #w.write(str(packet) + ",")
+                #w.close()
             else:
                 if self.getHack(packet) != "Unknown":
                     self.client.sendServerMessage("[Anti-Cheat] The player <BL>"+ self.client.playerName +"<BL> is suspected of cheat! (<VP>"+self.getHack(packet)+").")
@@ -59,9 +59,8 @@ class AntiCheat:
                         self.hours = 360
                     else:
                         self.hours = self.bans_done * 360
-                       
                     self.bans_done += 1
                     x = open('./cheat/anticheat_bans.txt', 'a')
                     x.write("= Player: "+ self.client.playerName +" | Time: "+ str(self.hours) +" time (s) | Banned by: "+ str(packet) +" | Date: "+ self.getHack(packet) +" |\n")
                     x.close()
-                    self.server.banPlayer(self.client, 0, "Hack (last warning before account deletion)", "ANTI-CHEAT", True)
+                    #self.server.banPlayer(self.client, 0, "Hack (last warning before account deletion)", "ANTI-CHEAT", True)

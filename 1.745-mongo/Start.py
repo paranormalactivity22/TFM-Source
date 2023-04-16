@@ -292,7 +292,7 @@ class Client:
         else:
             self.server.connectedCounts[self.ipAddress] = 1
         
-        if self.server.connectedCounts[self.ipAddress] >= 100 or self.ipAddress in self.server.IPPermaBanCache or self.ipAddress in self.server.IPTempBanCache or self.ipAddress in self.server.badIPS:
+        if self.server.connectedCounts[self.ipAddress] >= 10 or self.ipAddress in self.server.IPPermaBanCache or self.ipAddress in self.server.IPTempBanCache or self.ipAddress in self.server.badIPS:
             self.transport.close()
             self.server.IPTempBanCache.append(self.ipAddress)
 
@@ -340,7 +340,7 @@ class Client:
 
         self.transport.close()
                                                     
-    def sendPacket(self, identifiers, data=b""):
+    def sendPacket(self, identifiers, data=b""): 
         loop.create_task(self._sendPacket(identifiers, data))
 
     async def _sendPacket(self, identifiers, data=b""):
@@ -387,12 +387,6 @@ class Client:
                 else:
                     self.validatingVersion = True
                     self.sendCorrectVersion(lang)
-            else:
-                if (C == 44 and CC == 1):
-                    self.validatingVersion = True
-                    await self.Packets.parsePacket(packetID, C, CC, packet)
-                    return
-                self.transport.close()
         else:
             try:
                 self.lastPacketID = packetID
@@ -405,6 +399,92 @@ class Client:
                 sex.SaveException("Server.log", self, "servererreur")
 
 # Functions
+    def sendModerationCommands(self):
+        message = "Moderation Commands: [] - required | () - optional\n"
+        message += "Dealing with naughty mice\n"
+        message += "<J>/ban</J> <V>[playerName] [duration] [reason]</V> : <BL>Bans the player for the set duration.</BL>\n"
+        #message += "<J>/banip</J> <V>[IP]</V> : <BL>Bans the every player with given IP.</BL>\n"
+        message += "<J>/iban</J> <V>[playerName] [duration] [reason]</V> : <BL>Bans the player for the set duration, unmarked message on the room.</BL>\n"
+        message += "<J>/mute</J> <V>[playerName] [duration] [reason]</V> : <BL>Prevent player from speaking for the set duration.</BL>\n"
+        message += "<J>/imute</J> <V>[playerName] [duration] [reason]</V> : <BL>Prevent player from speaking for the set duration, unmarked message on the room.</BL>\n"
+        message += "<J>/kick</J> <V>[playerName]</V> : <BL>Disconnects the player from the game.</BL>\n"
+        message += "<J>/mumute</J> <V>[playerName]</V> : <BL>Mutes the player without telling them, they see it as if they are sending messages, but nobody else sees the messages (removed on reconnect).</BL>\n"
+        message += "<J>/demute</J> <V>[playerName]</V> : <BL>Unmute a player. Do not use /mute 0 to unmute a player! (Aliases: /unmute)</BL>\n"
+        message += "<J>/deban</J> <V>[playerName]</V> : <BL>Removes the last ban from a player's account. Do not use /ban 0 to unban a player! (Aliases: /unban)</BL>\n"
+        message += "<J>/debanip</J> <V>[IP]</V> : <BL>Unbans the selected IP address. (Aliases: /unbanip)</BL>\n"
+        message += "<J>/clearban</J> <V>[playerName]</V> : <BL>Deletes the voteban on a person.</BL>\n"
+        message += "<J>/banhack</J> <V>[playerName]</V> : <BL>Special ban command for cheaters.</BL>\n"
+        message += "<J>/ibanhack</J> <V>[playerName]</V> : <BL>Special ban command for singers, unmarked message on the room.</BL>\n"
+        message += "<J>/prison</J> <V>[playerName]</V> : <BL>Teleports the player to your room and does not let them leave (use again to return them to a normal room.</BL>\n"
+        message += "<J>/casier</J> <V>[playerName|IP]</V> : <BL>Gives the list of sanctions received by a player or ip address.</BL>\n"
+        if self.privLevel > 7:
+            message += "<J>/removeplayerrecords</J> <V>[playerName]</V> : <BL>Removes all records broken by specific player.</BL>\n"
+        message += "\nChannels :\n"
+        message += "<J>/a</J> : <BL>Allows you to speak in the arbitre channel of your community.</BL>\n"
+        message += "<J>/a*</J> : <BL>Allows you to speak on the international arbitre channel.</BL>\n"
+        message += "<J>/m</J> : <BL>Allows you to speak in the moderator channel of your community.</BL>\n"
+        message += "<J>/m*</J> : <BL>Allows you to speak on the international moderator channel.</BL>\n"
+        if self.privLevel > 7:
+            message += "<J>/ms</J> <V>[message]</V> : <BL>Allows you to put a [Moderation] 'Message' on a room.</BL>\n"
+        message += "\nIP Address Commands :\n"
+        message += "<J>/nomip</J> <V>[playerName]</V> : <BL>Gives the designated player's IP.</BL>\n"
+        message += "<J>/ipnom</J> <V>[IP]</V> : <BL>Gives the list of accounts linked to the IP address.</BL>\n"
+        message += "<J>/ip</J> <V>[playerName]</V> : <BL>Gives the IP and country of a connected player.</BL>\n"
+        message += "<J>/l</J> <V>[playerName|IP]</V> : <BL>Gives the list of the 200 previous connections of the requested nickname or IP address, independently of the server reboot for the functioning of nomip/ipnom.</BL>\n"
+        message += "<J>/relation</J> <V>[playerName]</V> : <BL>Gives list of related accounts since the last reboot.</BL>\n"
+        #message += "<J>/geoip</J> <V>[IP]</V> : <BL>Gives country information for an IP.</BL>\n"
+        message += "\nRooms:\n"
+        message += "<J>/closeroom</J> <V>(roomName)</V> : <BL>Dissolves the room you are in. Everyone is kicked out to other rooms.</BL>\n"
+        message += "<J>/commu</J> <V>[community]</V> : <BL>Changes your community in-game.</BL>\n"
+        message += "<J>/room*</J> <V>[community-roomName]</V> : <BL>Joins the specified room on the specified community. (Aliases: /sala*, /salon*)</BL>\n"
+        message += "<J>/follow</J> <V>[playerName]</V> : <BL>Joins the room of a specific player. NOTE: Room player limits and passwords are skipped by these commands. (aliases: /join)</BL>\n"
+        message += "<J>/find</J> <V>[playerName]</V> : <BL>Gives the name of the room where a player is. (aliases: /chercher)</BL>\n"
+        message += "<J>/creator</J> <V>(community-roomName)</V> : <BL>Returns the first mouse to join room.</BL>\n"
+        message += "<J>/ninja</J> <V>[playerName]</V> : <BL>Performs the same functionality as Watch in modopwet, but saves you having to search through modopwet for the report.</BL>\n"
+        message += "<J>/ls</J> <V>(text)</V> : <BL> Gives the number of mice in a room.</BL>\n"
+        message += "<J>/lsroom</J> <V>(roomName)</V> : <BL>Lists the names of the mice in a room and their IP addresses.</BL>\n"
+        message += "<J>/lsc</J> : <BL>Gives the number of mice per community.</BL>\n"
+        message += "<J>/lsarb</J> : <BL>Gives the list of connected Arbitres as well as their room.</BL>\n"
+        message += "<J>/lsmodo</J> : <BL>Gives the list of connected Moderators and Admins as well as their room.</BL>\n"
+        message += "<J>/roomkick</J> <V>[playerName]</V> : <BL>Kicks specific player from the room.</BL>\n"
+        if self.privLevel > 7:
+            message += "<J>/tropplein</J> <V>(Number)</V> : <BL>Locks the room to a specific max number of players (mods can still join using the methods above). If command don't have arguments displays what the room is currently locked to. Use /tropplein 0 to unlock the room.</BL>\n"
+        message += "\nMiscellaneous:\n"
+        if self.privLevel > 7:
+            message += "<J>/clearchat</J> : <BL>Clear the room chat.</BL>\n"
+        message += "<J>/chatlog</J> <V>[playerName]</V> : <BL>Gives the log of messages by a player.</BL>\n"
+        message += "<J>/chatfilter</J> <V>[add|list|del]</V> : <BL>Adds or removes string to chat filter, or shows all strings in chat filter.</BL>\n"
+        message += "<J>/ch</J> <V>[playerName]</V> : <BL>Designates the next Shaman. (Doesn't work as a double shaman!)</BL>\n"
+        message += "<J>/delrecord</J> <V>[mapName]</V> : <BL> Deletes the record on specific map.</BL>\n"
+        message += "<J>/info</J> <V>(mapName)</V> : <BL> Gives the information of a map.</BL>\n"
+        #message += "<J>/infocommu</J> <V>(community)</V> : <BL>Gives info about which game modes are being played by mice connected to community.</BL>\n"
+        message += "<J>/infotribu</J> <V>[text]</V> : <BL>Shows information about a tribe (members, cafofo map, date of entry of members, positions and permissions).</BL>\n"
+        #message += "<J>/log</J> : <BL>Lists the last 200 bans in the game.</BL>\n"
+        message += "<J>/lsmap</J> <V>(playerName)</V> : <BL> Gives list a player's maps, with their category.</BL>\n"
+        #message += "<J>/lsbulle</J> : <BL>Gives info about the satellite servers (which host the rooms)</BL>\n"
+        #message += "<J>/lstribe</J> : <BL>Gives the list of tribes with at least one person connected.</BL>\n"
+        #message += "<J>/lsbots</J> : <BL>Gives the list of bots.</BL>\n"
+        #message += "<J>/max</J> : <BL>Gives the maximum number of players connected since the last reboot.</BL>\n"
+        if self.privLevel > 7:
+            message += "<J>/moveplayer</J> <V>[playerName] [roomName]</V> : <BL>Moves given player to specific room.</BL>\n"
+        message += "<J>/sy?</J> : <BL>Displays the current synchroniser.</BL>\n"
+        message += "<J>/sy</J> <V>[playerName]</V> : <BL>Sets a new synchroniser.</BL>\n"
+        message += "<J>M</J> : <BL>Opens Modopwet, list of reports made by players.</BL>\n"
+        message += "<J>/ + Tab</J> : <BL>Lists available commands.</BL>\n"
+        if self.privLevel > 8:
+            message += "\nAdmin Commands:\n"
+            message += "<J>/addcode</J> <V>[name]</V> <V>[fraises|cheeses]</V> <V>[amount]</V> : <BL>Creates an japan expo code.</BL>\n"
+            message += "<J>/changepassword</J> <V>[name]</V> <V>[password]</V> : <BL>Changes given player's password.</BL>\n"
+            message += "<J>/commandlog</J> <V>[name]</V> : <BL>Lists all commands which player executed since last reboot.</BL>\n"
+            message += "<J>/move</J> <V>[roomName]</V> : <BL>Moves all players in the given room.</BL>\n"
+            message += "<J>/resetprofile</J> <V>[playerName]</V> : <BL>Resets everything from a given player.</BL>\n"
+            message += "<J>/respawn</J> <V>[playerName]</V> : <BL>Respawns given player if he is dead in current room.</BL>\n"
+            message += "<J>/settime</J> <V>[duration]</V> : <BL>Sets a new duration in current map.</BL>\n"
+            message += "<J>/updatesql</J> : <BL>Update the database.</BL>\n"
+            message += "<J>/removemap</J> <V>[mapName]</V> : <BL>Deletes given map from the database.</BL>\n"
+            message += "<J>/smc</J> <V>[message]</V> : <BL>Sends message to everyone in the server.</BL>\n"
+            
+        return message
 
     def buyNPCItem(self, itemID):
         item = self.server.npcs["Shop"][self.lastNpc][itemID]
@@ -514,24 +594,29 @@ class Client:
             return
         if self.isTrade:
             self.cancelTrade(self.tradeName)
-        #roomName = roomName.replace("<", "&lt;")
-        #if not roomName.startswith("*") and not roomName.startswith("@") and not (len(roomName) > 3 and roomName[2] == "-" and self.privLevel >= 7):
-        #    roomName = "%s-%s" %(self.langue, roomName)
+        roomFuncorps = []
+        roomName = roomName.replace("<", "&lt;") #
+        if not roomName.startswith("*") and not roomName.startswith("@") and not (len(roomName) > 3 and roomName[2] == "-" and self.privLevel >= 7): #
+            roomName = "%s-%s" %(self.langue, roomName) #
             
-        #for rooms in ["\x03[Editeur] ", "\x03[Totem] ", "\x03[Tutorial] "]:
-        #    if roomName.startswith(rooms) and not self.playerName == roomName.split(" ")[1]:
-        #        roomName = "%s-%s" %(self.langue, self.playerName)
+        for rooms in ["\x03[Editeur] ", "\x03[Totem] ", "\x03[Tutorial] "]: #
+            if roomName.startswith(rooms) and not self.playerName == roomName.split(" ")[1]: # 
+                roomName = "%s-%s" %(self.langue, self.playerName) #
             
-        #if self.room != None:
-            #self.room.removeClient(self)
+        if self.room != None: #
+            self.room.removeClient(self) #
 
-        #self.roomName = roomName
-        #self.sendGameType(11 if "music" in roomName else 4, 0)
-        #self.sendEnterRoom(roomName)
-        #self.server.addClientToRoom(self, roomName)
+        self.roomName = roomName #
+        self.sendGameType(11 if "music" in roomName else 4, 0) #
+        self.sendEnterRoom(roomName) #
+        self.server.addClientToRoom(self, roomName) #
         self.sendPacket(Identifiers.old.send.Anchors, self.room.anchors)
+        self.sendPacket([29, 1], "")
 
-        for player in self.server.players.values(): 
+        for player in [*self.server.rooms[roomName].clients.values()]:
+            if player.privLevel in [5, 9] or player.isFunCorpPlayer:
+                roomFuncorps.append(player.playerName)
+        
             if self.playerName in self.friendsList and player.playerName in player.friendsList:
                 player.tribulle.sendFriendChangedRoom(self.playerName, self.langueID)
             
@@ -551,10 +636,7 @@ class Client:
             self.sendMessage("<V>[#]</V> <V>Welcome to</V> <BL>Fastracing</BL>.\n<V>[#]</V> <V>To view the</V> <V>leaderboard,</V> <v>type</v> '<BL>!lb</BL>'\n<V>[#]</V> '<BL>!listrec</BL>' <V>to learn more about your broken records.</V>")
     
         if self.room.isFuncorp:
-            self.sendLangueMessage("", "<FC>$FunCorpActiveAvecMembres</FC>")
-        else:
-            self.room.funcorpNames[self.playerName] = self.playerName
-            self.mouseName = self.playerName
+            self.sendLangueMessage("", "<FC>$FunCorpActiveAvecMembres</FC>", ', '.join(map(str, roomFuncorps)))
 
         if self.followed != None:
             self.followed.enterRoom(self.roomName)
@@ -675,10 +757,6 @@ class Client:
                 self.sendTotemItemCount(0)
 
     async def loginPlayer(self, playerName, password, startRoom):
-        #if not playerName.split('#')[0] in ['sim_pro', 'Test']: #blacklist
-        #    for i in range(0, 100):
-        #        self.sendPacket([28, 61], ByteArray().writeInt(100-i).toByteArray())
-        #        await asyncio.sleep(1+i)
         if not self.canLogin[0]: 
             print("[%s] [FATAL] Cannot receive player's computer language (%s)" %(time.strftime("%H:%M:%S"), playerName))
             self.transport.close()
@@ -706,12 +784,16 @@ class Client:
                         
         if not self.isGuest:
             banInfo = self.server.getTempBanInfo(playerName)
+            if len(banInfo) > 0 and self.privLevel == -1:
+                self.sendPacket(Identifiers.old.send.Player_Ban_Login, [banInfo[0]])
+                #self.transport.close() TEEEEEEEEEEST
+                return
             timeCalc = Utils.getHoursDiff(banInfo[1])
             if timeCalc <= 0:
                 self.server.removeTempBan(playerName)
             else:
                 self.sendPacket(Identifiers.old.send.Player_Ban_Login, [timeCalc, banInfo[0]])
-                self.transport.close()
+                #self.transport.close() TEEEEEEEEEEST
                 return
 
         if self.server.checkConnectedAccount(playerName):
@@ -830,20 +912,17 @@ class Client:
                         return
 
             if "@" not in playerName:
-                if self.privLevel == -1:
-                    self.sendPacket(Identifiers.old.send.Player_Ban_Login, ["The account has been permanently banned."])
-                    self.transport.close()
-                    return
-
                 self.server.lastPlayerCode += 1
                 self.playerName = playerName
                 self.playerCode = self.server.lastPlayerCode
                 self.server.players[self.playerName] = self
-                #self.ipCountry = self.getCountryIP(self.ipAddress)
-                self.ipDetails[0] = "BR"
-                self.ipDetails[1] = "Brazil"
-                self.ipDetails[2] = "North America"
-                self.ipDetails[3] = "#FFFFFF"
+                if len(self.server.players) > self.server.MaximumPlayers:
+                    self.sendPacket(Identifiers.send.Queue_popup, ByteArray().writeInt(len(self.server.players) - self.server.MaximumPlayers).toByteArray())
+                    await asyncio.sleep(10)
+                    self.transport.close()
+                    return
+                self.server.MaximumPlayers += 1
+                self.ipDetails = self.receiveIPDetails(self.ipAddress)
                 """
                 0 - country code
                 1 - country name
@@ -851,13 +930,14 @@ class Client:
                 3 - ip color
                 """
                 self.loginTime = Utils.getTime()
-                #Cursor['loginlogs'].insert_one({'Username':playerName,'Ip':Utils.EncodeIP(self.ipAddress), 'IPColor':self.ipCountry, 'Country':self.getCountryIP(self.ipAddress), 'Time': Utils.getDate(), 'Community': self.langue, 'ConnectionID':self.server.miceName})
+                Cursor['loginlogs'].insert_one({'Username':playerName,'Ip':Utils.EncodeIP(self.ipAddress), 'IPColor':self.ipDetails[3], 'Country':self.ipDetails[1], 'Time': Utils.getDate(), 'Community': self.langue, 'ConnectionID':self.server.miceName})
                 loginlog = open("./include/logs/Logins.log", "a")
                 loginlog.write("PlayerName: %s | IP Address: %s | Date: %s | Language: %s | Player Code: %s |.\n" % (playerName, self.ipAddress, Utils.getDate(), self.langue, self.playerCode))
                 traceback.print_exc(file=loginlog)
                 loginlog.close()
                 self.sendPacket(Identifiers.send.Community_Partners, ByteArray().writeShort(1).writeUTF("DisneyClient").writeUTF("https://disneyclient.com/public/logo.png").toByteArray())
-                
+                self.sendPlayerIdentification()
+                self.sendLogin()
                 if not self.isGuest:
                     # Staff Positions
                     self.isLuaCrew = True if "LuaCrew" in self.roles else False
@@ -866,13 +946,9 @@ class Client:
                     self.isFunCorpPlayer = True if "FunCorp" in self.roles else False
                     self.isArbitre = True if "Arbitre" in self.roles else False
                 
-                self.sendPlayerIdentification()
-                self.sendLogin()
-                self.sendPacket(Identifiers.send.Switch_Tribulle, ByteArray().writeBoolean(True).toByteArray())
-                if not self.isGuest:
-                    self.sendPacketTribulle(62, ByteArray().writeUTF(self.computerLanguage).toByteArray())
                     if self.playerName in self.server.reports and self.server.reports[self.playerName]["state"] == "disconnected":
                         self.server.reports[self.playerName]["state"] == "online"
+                        
                     self.isMute = playerName in self.server.userMuteCache
                     for name in ["cheese", "first", "shaman", "shop", "bootcamp", "hardmode", "divinemode"]:
                         self.checkAndRebuildTitleList(name)
@@ -881,6 +957,7 @@ class Client:
                     self.Shop.sendShamanItems()
                     self.Skills.sendShamanSkills(False)
                     self.Skills.sendExp(self.shamanLevel, self.shamanExp, self.shamanExpNext)
+                    
                     _list = []
                     for i in self.shopItems.split(','):
                         if str(i)[:3] == '230':
@@ -892,7 +969,6 @@ class Client:
                     if self.shamanSaves >= self.server.minimumNormalSaves:
                         self.sendShamanType(self.shamanType, (self.shamanSaves >= self.server.minimumNormalSaves and self.hardModeSaves >= self.server.minimumHardSaves), self.isNoShamanSkills)
                 
-                
                     for title in self.titleList:
                         if str(title).split(".")[0] == str(self.titleNumber):
                             self.titleStars = int(str(title).split(".")[1])
@@ -901,10 +977,13 @@ class Client:
                     self.server.checkPromotionsEnd()
                     self.sendPacket(Identifiers.send.Time_Stamp, ByteArray().writeInt(Utils.getTime()).toByteArray())
                     self.Shop.sendPromotions()
+                    
                     if self.langue.lower() in self.server.chats and not self.playerName in self.server.chats[self.langue.lower()]:
                         self.server.chats[self.langue.lower()].append(self.playerName)
                     elif not self.langue.lower() in self.server.chats:
                         self.server.chats[self.langue.lower()] = [self.playerName]
+                    
+                    self.sendModInfo(1)
                     
                     if self.tribeCode != 0:
                         self.tribeInfo = self.tribulle.getTribeInfo(self.tribeCode)
@@ -913,7 +992,9 @@ class Client:
                         self.tribeHouse = int(self.tribeInfo[2])
                         self.tribeRanks = str(self.tribeInfo[3])
                         self.tribeChat = str(self.tribeInfo[4])
-                        self.tribulle.sendTribeMemberConnected()
+                    
+                    self.sendPacket(Identifiers.send.Switch_Tribulle, ByteArray().writeBoolean(True).toByteArray())
+                    self.sendPacketTribulle(62, ByteArray().writeUTF(self.computerLanguage).toByteArray())
                     self.tribulle.sendFriendsList(None)
                     
                     for player in self.server.players.values():
@@ -923,41 +1004,45 @@ class Client:
                     self.sendInventoryConsumables()
                     self.Shop.checkGiftsAndMessages()
                     self.checkLetters()
-                    self.missions.loadMissions()
-                    self.sendModInfo(1)
+                    #self.missions.loadMissions()
                     
-                #self.server.MaximumPlayers += 1
+                    if self.tribeCode != 0:
+                        self.tribulle.sendTribeMemberConnected()
+                                      
                 self.ResetAfkKillTimer()
                 self.resSkillsTimer = self.server.loop.call_later(600, setattr, self, "canRedistributeSkills", True)
                 self.startBulle(self.server.checkRoom(startRoom, self.langue) if not startRoom == "" and not startRoom == "1" else self.server.recommendRoom(self.langue))
+                self.sendPacket([144, 26], ByteArray().writeEncoded(1).writeUTF("240.png?d=698").writeUTF(self.server.furscore1).writeEncoded(65280).writeUTF("241.png?d=698").writeUTF(self.server.furscore2).writeEncoded(16711680).toByteArray())
+
+    def receiveIPDetails(self, ipAddress):
+        if ipAddress == "127.0.0.1":
+            return ["LH", "Localhost", "None", "#FFFFFF"]
+        response = requests.get(f'https://ipapi.co/{ipAddress}/json/').json()
+        
+        continent = response.get("continent_code")
+        if continent == "AF":
+            continent = "Africa"
+        if continent == "AN":
+            continent = "Antarctica"
+        if continent == "AS":
+            continent = "Asia"
+        if continent == "EU":
+            continent = "Europe"
+        if continent == "NA":
+            continent = "North America"
+        if continent == "OC":
+            continent = "Oceania"
+        if continent == "SA":
+            continent = "South America"
+        return [response.get("country_code"), response.get("country_name"), continent, "#7ffefe"]
 
     def startBulle(self, roomName):
         if not self.isEnterRoom:
             self.isEnterRoom = True
-            self.server.loop.call_later(0.2, lambda: self.sendBulle(roomName))
+            #self.server.loop.call_later(0.4, self.sendBulle)
             self.server.loop.call_later(0.8, lambda: self.enterRoom(roomName))
             self.server.loop.call_later(6, setattr, self, "isEnterRoom", False)
     
-    def sendBulle(self, roomName): #i think bc of this
-        roomName = roomName.replace("<", "&lt;")
-        if not roomName.startswith("*") and not roomName.startswith("@") and not (len(roomName) > 3 and roomName[2] == "-" and self.privLevel >= 7):
-            roomName = "%s-%s" %(self.langue, roomName)
-            
-        for rooms in ["\x03[Editeur] ", "\x03[Totem] ", "\x03[Tutorial] "]:
-            if roomName.startswith(rooms) and not self.playerName == roomName.split(" ")[1]:
-                roomName = "%s-%s" %(self.langue, self.playerName)
-    
-        if self.room != None:
-            self.room.removeClient(self)
-
-        self.roomName = roomName
-        self.sendGameType(11 if "music" in roomName else 4, 0)
-        self.sendEnterRoom(roomName)
-        self.server.addClientToRoom(self, roomName)
-        if self.room.bulle_id == 0:
-            self.room.bulle_id = random.randint(0, 7)
-        timestamp = int(time.time() / 100)
-        #self.sendPacket(Identifiers.send.Bulle, ByteArray().writeInt(self.room.bulle_id).writeInt(timestamp).writeInt(self.playerID if not self.isGuest else -1).writeUTF("127.0.0.1").writeUTF("11801-12801-13801-14801").toByteArray())
 
     def startPlay(self): ###########
         self.playerStartTimeMillis = self.room.gameStartTimeMillis
@@ -988,8 +1073,8 @@ class Client:
         if self.room.catchTheCheeseMap and not self.room.roomDetails[1]:
             self.sendPacket(Identifiers.old.send.Catch_The_Cheese_Map, [shamanCode])
             self.sendPacket(Identifiers.send.Player_Get_Cheese, ByteArray().writeInt(shamanCode).writeBoolean(True).toByteArray())
-            #if not self.room.currentMap in [108, 109]:
-            #    self.sendShamanCode(shamanCode, shamanCode2)
+            if self.room.currentMap in [111, 110, 112, 113, 114]:
+                self.sendShamanCode(shamanCode, shamanCode2)
         else:
             self.sendShamanCode(shamanCode, shamanCode2)
 
@@ -1077,7 +1162,7 @@ class Client:
         for room in ["vanilla", "survivor", "racing", "music", "bootcamp", "defilante", "village", "#fastracing"]:
             if rooms.startswith(room) and not count == "" or rooms.isdigit():
                 found = not (int(count) < 1 or int(count) > 1000000000 or rooms == room)
-
+        
         self.sendPacket(Identifiers.send.Enter_Room, ByteArray().writeBoolean(found).writeUTF(roomName).writeUTF("int" if roomName.startswith("*") or roomName.startswith("@") else lang).toByteArray())
 
     def sendGameType(self, gameType, serverType):
@@ -1130,7 +1215,7 @@ class Client:
         self.sendPacket(Identifiers.send.Game_Mode, packet.toByteArray())
 
     def sendGiveCheese(self, distance=-1):
-        if distance != -1 and distance != 1000 and not self.room.catchTheCheeseMap:
+        if distance not in [-1, 1000] and not self.room.catchTheCheeseMap and self.room.countStats:
             if distance >= 30:
                 self.isSuspect = True
     
@@ -1223,29 +1308,30 @@ class Client:
 
     def sendModInfo(self, isOnline):
         if self.privLevel == 9:
-            self.sendMessage(f"<font color='#fc0303'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.")
+            self.sendMessage(f"<font color='#fc0303'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.</font>")
             
-        elif self.privLevel in [8, 7]:
+        elif self.privLevel in [8, 7] or self.isArbitre:
             cc = "<font color='#c565fe'>" if not self.privLevel == 8 else "<font color='#b993ca'>"
-            self.sendMessage(f"{cc}• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.")
+            self.sendMessage(f"{cc}• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.</font>")
             
         elif self.privLevel == 6 or self.isMapCrew:
-            self.sendMessage(f"<font color='#2F7FCC'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.")
+            self.sendMessage(f"<font color='#2F7FCC'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.</font>")
             
         elif self.privLevel == 5 or self.isFunCorpPlayer:
-            self.sendMessage(f"<font color='#F89F4B'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.")
+            self.sendMessage(f"<font color='#F89F4B'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.</font>")
             
         elif self.privLevel == 4 or self.isLuaCrew:
-            self.sendMessage(f"<font color='#79bbac'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.")
+            self.sendMessage(f"<font color='#79bbac'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.</font>")
             
         elif self.privLevel == 3 or self.isFashionSquad:
-            self.sendMessage(f"<font color='#ffb6c1'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.")
+            self.sendMessage(f"<font color='#ffb6c1'>• [{self.langue.upper()}] {self.playerName} {'just connected' if bool(isOnline) else 'has disconnected'}.</font>")
             
             
-        if self.privLevel > 2 or self.isFashionSquad:
+        if self.privLevel > 2 or self.isFashionSquad or self.isLuaCrew or self.isFunCorpPlayer or self.isMapCrew:
             for player in self.server.players.values():
-                if player.playerName != self.playerName:
-                    self.sendMessage(f"<font color={'#fc0303' if self.privLevel == 9 else cc if self.privLevel in [8, 7] else '#2F7FCC' if self.privLevel == 6 or self.isMapCrew else '#F89F4B' if self.privLevel == 5 or self.isFunCorpPlayer else '#79bbac' if self.privLevel == 4 or self.isLuaCrew else '#ffb6c1'}>• [{player.langue.upper()}] {player.playerName} : {player.roomName}")
+                if player.playerName != self.playerName and (player.privLevel > 2 or player.isFashionSquad or player.isLuaCrew or player.isFunCorpPlayer or player.isMapCrew):
+                    color = '#fc0303' if player.privLevel == 9 else '#b993ca' if player.privLevel == 8 else '#c565fe' if player.privLevel == 7 or player.isArbitre else '#2F7FCC' if player.privLevel == 6 or player.isMapCrew else '#F89F4B' if player.privLevel == 5 or player.isFunCorpPlayer else '#79bbac' if player.privLevel == 4 or player.isLuaCrew else '#ffb6c1'
+                    self.sendMessage(f"<font color='{color}'>• [{player.langue.upper()}] {player.playerName} : {player.roomName}</font>")
 
     def sendModMuteMessage(self, playerName, hours, reason, only):
         if only == False:
@@ -1304,7 +1390,7 @@ class Client:
         if self.room != None and silent:
             for player in self.room.clients.copy().values():
                 player.sendLangueMessage("", "<ROSE>• [Moderation] $Message_Ban", self.playerName, str(hours), reason)
-        #self.server.disconnectIPAddress(self.ipAddress)
+        #self.transport.close() TEEEEEEEEEEST
 
     def sendPlayerEmote(self, emoteID, flag, others, lua):
         packet = ByteArray().writeInt(self.playerCode).writeByte(emoteID)
@@ -1812,47 +1898,43 @@ class Client:
         x,y = (sx-pg)/2,(sy-pu)/2
         ly = y+48
         
-        addText = self.room.addTextArea
         isim = self.playerName
         self.lbsayfa,sinir = 1,10
         self.records = sorted(self.server.fastRacingRecords["sequentialrecords"],key=lambda x: x[1],reverse=True)
         if len(self.records) < 10: sinir=len(self.records)
         self.sayfasayi = int(math.ceil(len(self.records)/10.0))
         if self.sayfasayi < 1: self.sayfasayi = 1
-        addText(5000, "<p align='center'><font color='#ffc15e'><b>LEADER BOARD</b></font></p>", isim, x,y, pg,pu, 0x111111, 0x111111, 90, False)
-        addText(5001, "" , isim, x+20, y+20, pg-40, 15, 0x111111, 0xFFFFFF, 10, False)
-        addText(5002, "<p align='center'><font color='#ffc15e'>Player</font></p>" , isim, x-80, y+20, pg-40, 40, 0x111111, 0xFFFFFF, 0, False)
-        addText(5003, "<p align='center'><font color='#ffc15e'>Record</font></p>" , isim, x+80, y+20, pg, 40, 0x111111, 0x000000, 0, False)
-        addText(5035, "<p align='center'><a href='event:lbgeri'><font color='#ffc15e'>«</a> 1 / "+str(self.sayfasayi)+" <a href='event:lbileri'><b>»</b></font></a>" , isim, x, pu+10, pg, 40, 0x324650, 0x000000, 0, False)	
-        addText(5036, "<a href='event:lbkapat'><font color='#ffc15e'>X</font></a>" , isim, (x+pg)-11, y, 12, 15, 0x111111, 0x111111, 100, False)	
+        self.room.addTextArea(5000, "<p align='center'><font color='#ffc15e'><b>LEADER BOARD</b></font></p>", isim, x,y, pg,pu, 0x111111, 0x111111, 90, False)
+        self.room.addTextArea(5001, "" , isim, x+20, y+20, pg-40, 15, 0x111111, 0xFFFFFF, 10, False)
+        self.room.addTextArea(5002, "<p align='center'><font color='#ffc15e'>Player</font></p>" , isim, x-80, y+20, pg-40, 40, 0x111111, 0xFFFFFF, 0, False)
+        self.room.addTextArea(5003, "<p align='center'><font color='#ffc15e'>Record</font></p>" , isim, x+80, y+20, pg, 40, 0x111111, 0x000000, 0, False)
+        self.room.addTextArea(5035, "<p align='center'><a href='event:lbgeri'><font color='#ffc15e'>«</a> 1 / "+str(self.sayfasayi)+" <a href='event:lbileri'><b>»</b></font></a>" , isim, x, pu+10, pg, 40, 0x324650, 0x000000, 0, False)	
+        self.room.addTextArea(5036, "<a href='event:lbkapat'><font color='#ffc15e'>X</font></a>" , isim, (x+pg)-11, y, 12, 15, 0x111111, 0x111111, 100, False)	
         
-        i,bos = 0," "*16
+        i = 0
         for sira in range(sinir):
             i+=1
             t = self.records[sira]
-            recisim,rec = t[0],t[1]
-            addText(5003+i, bos+"<font color='#ffc15e'><b>"+str(recisim)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 30, False)
-            addText((5013+i), "<p align='center'><font color='#ffc15e'>"+str(rec)+"</font></p>" , isim,  x+((pg/2)), ly+(27*(i-1)), (pg-40)/2, 18, 0xFFFFFF, 0x000000, 30, False)
-            addText((5024+i), "<font color='#ffc15e'><b>"+str(i)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 0, False)
+            recisim, rec = t[0],t[1]
+            if len(recisim) >= 8:
+                bos = " "*8
+            else:
+                bos = " "*16
+            self.room.addTextArea(5003+i, bos+"<font color='#ffc15e'><b>"+str(recisim)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 30, False)
+            self.room.addTextArea((5013+i), "<p align='center'><font color='#ffc15e'>"+str(rec)+"</font></p>" , isim,  x+((pg/2)), ly+(27*(i-1)), (pg-40)/2, 18, 0xFFFFFF, 0x000000, 30, False)
+            self.room.addTextArea((5024+i), "<font color='#ffc15e'><b>"+str(i)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 0, False)
         
     def lbSayfaDegis(self,ileri,kapat=False):
-        addText = self.room.addTextArea
-        updateText = self.room.updateTextArea
-        removeText= self.room.removeTextArea
         isim = self.playerName
         if kapat:
             for i in range(5000,5037):
-                removeText(i,isim)
+                self.room.removeTextArea(i,isim)
             return
             
         sx,sy = 800,400
         pg,pu = 410,340
         x,y = (sx-pg)/2,(sy-pu)/2
         ly = y+48
-        
-        addText = self.room.addTextArea
-        updateText = self.room.updateTextArea
-        removeText= self.room.removeTextArea
         isim = self.playerName
         
         if ileri:
@@ -1868,7 +1950,7 @@ class Client:
         if self.lbsayfa==1:
             baslangic,bitis = 0,10
         
-        updateText(5035, "<p align='center'><a href='event:lbgeri'><font color='#ffc15e'>«</a> "+str(self.lbsayfa)+" / "+str(self.sayfasayi)+" <a href='event:lbileri'><b>»</b></font></a>" , isim)	    
+        self.room.updateTextArea(5035, "<p align='center'><a href='event:lbgeri'><font color='#ffc15e'>«</a> "+str(self.lbsayfa)+" / "+str(self.sayfasayi)+" <a href='event:lbileri'><b>»</b></font></a>" , isim)	    
        
         i,bos = 0," "*16
         for sira in range(baslangic,bitis):
@@ -1876,25 +1958,26 @@ class Client:
             try:
                 t = self.records[sira]
                 recisim,rec = t[0],t[1]
-                addText(5003+i, bos+"<font color='#ffc15e'><b>"+str(recisim)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 30, False)
-                addText((5013+i), "<p align='center'><font color='#ffc15e'>"+str(rec)+"</font></p>" , isim,  x+((pg/2)), ly+(27*(i-1)), (pg-40)/2, 18, 0xFFFFFF, 0x000000, 30, False)
-                addText((5024+i), "<font color='#ffc15e'><b>"+str(sira if self.lbsayfa !=1 else i)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 0, False)
+                self.room.addTextArea(5003+i, bos+"<font color='#ffc15e'><b>"+str(recisim)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 30, False)
+                self.room.addTextArea((5013+i), "<p align='center'><font color='#ffc15e'>"+str(rec)+"</font></p>" , isim,  x+((pg/2)), ly+(27*(i-1)), (pg-40)/2, 18, 0xFFFFFF, 0x000000, 30, False)
+                self.room.addTextArea((5024+i), "<font color='#ffc15e'><b>"+str(sira if self.lbsayfa !=1 else i)+"</font></b>", isim, x+20, ly+(27*(i-1)), (pg-40)/2-10, 18, 0xFFFFFF, 0x000000, 0, False)
             except:
-                removeText(5003+i,isim)
-                removeText(5013+i,isim)
-                removeText(5024+i,isim)
+                self.room.removeTextArea(5003+i,isim)
+                self.room.removeTextArea(5013+i,isim)
+                self.room.removeTextArea(5024+i,isim)
 
     async def playerWin(self, holeType, distance=-1):  #########
         if distance != -1 and distance != 1000 and self.isSuspect and self.room.countStats:
             if distance >= 30:
                 self.sendServerMessage("[A.C] The ip: %s of name %s used instant win hack." %(Utils.EncodeIP(self.ipAddress), self.playerName))
                 self.sendPacket(Identifiers.old.send.Player_Ban_Login, [0, "Instant win detected."])
+                self.isSuspect = False
                 self.transport.close()
                 return
 
         timeTaken = int((time.time() - (self.playerStartTimeMillis if self.room.autoRespawn else self.room.gameStartTimeMillis)) * 100)
-        ntimeTaken = timeTaken/100.0 #for fastracing
-        if timeTaken > 5:
+        ntimeTaken = timeTaken // 100.0 if timeTaken > 100 else timeTaken // 10.0 #for fastracing
+        if timeTaken > 7:
             self.room.canChangeMap = False
             canGo = self.room.checkIfShamanCanGoIn() if self.isShaman else True
             if not canGo:
@@ -1938,16 +2021,7 @@ class Client:
                         self.cheeseCount += self.cheeseCounter
 
                         timeTaken = int((time.time() - (self.playerStartTimeMillis if self.room.autoRespawn else self.room.gameStartTimeMillis)) * 100)
-                        if timeTaken > 100:
-                            t = timeTaken // 100.0
-                        else:
-                            t = timeTaken // 10.0
                         if self.room.isFastRacing:
-                            #if t < 15:
-                            #    self.sendServerMessage("[A.C] The ip: %s of name %s used instant win hack." %(Utils.EncodeIP(self.ipAddress), self.playerName))
-                            #    self.sendPacket(Identifiers.old.send.Player_Ban_Login, [0, "Instant win detected."])
-                            #    self.transport.close()
-                            #    return
                             if int(self.room.getPlayerCount()) >= int(self.server.needToFirst):
                                 if self.room.mapCode not in (-1, 31, 41, 42, 54, 55, 59, 60, 62, 89, 92, 99, 114, 801):
                                     try:
@@ -1957,21 +2031,15 @@ class Client:
                                         if self.room.mapCode in s:
                                             isim,sure = s[self.room.mapCode][0],s[self.room.mapCode][1]
                                         if timeDB[0] == 0 or timeTaken < timeDB[0]:
-                                            await self.server.recordSave(self.playerName,self.room.mapCode,str(t))
+                                            await self.server.recordSave(self.playerName,self.room.mapCode,str(ntimeTaken))
                                             RecDate = Utils.getTime()
                                             await CursorMaps.execute('update Maps set Time = ?, Player = ?, RecDate = ? where code = ?', [timeTaken, self.playerName, RecDate, self.room.mapCode])
                                             for client in self.room.clients.values():
-                                                client.sendMessage("<J>%s</J> set a <J>new record</J> for this map in <J>%s</J> second." %(self.playerName,t))
+                                                client.sendMessage("<J>%s</J> set a <J>new record</J> for this map in <J>%s</J> second." %(self.playerName,ntimeTaken))
 
                                     except:
                                         pass
-
-                        timeTaken = int((time.time() - (self.playerStartTimeMillis if self.room.autoRespawn else self.room.gameStartTimeMillis)) * 100)
-                        if timeTaken > 100:
-                            t = timeTaken / 100.0
-                        else:
-                            t = timeTaken / 10.0
-                                               				
+       				
                     if self.room.isFastRacing:
                         for player in self.room.clients.values():
                             if self.room.getPlayerCountUnique() >= self.server.needToFirst:
@@ -2057,6 +2125,8 @@ class Client:
                         self.room.giveShamanSave(self.room.currentSecondShamanName, self.room.currentSecondShamanType)
 
                 self.sendPlayerWin(place, timeTaken)
+                #if fur
+                
                 if self.room.luaRuntime != None:
                     self.room.luaRuntime.emit("PlayerWon", (self.playerName, str((time.time() - self.room.gameStartTimeMillis)*1000)[5:], str((time.time() - self.playerStartTimeMillis)*1000)[5:]))
 
@@ -2104,7 +2174,7 @@ class Server(asyncio.Transport):
         self.authKey = int(self.configSWF("swf.authKey")) if self.configSWF("swf.authKey") != "" else random.randint(0, 2147483647)
         self.lastShopGiftID = int(self.config("game.lastShopGiftID"))
         self.lastPlayerCode = int(self.config("game.lastPlayerCode"))
-        #self.MaximumPlayers = 0
+        self.MaximumPlayers = int(self.config("game.maximumplayers"))
         
         # Boolean
         self.isDebug = bool(int(self.config("game.debug")))
@@ -2124,6 +2194,9 @@ class Server(asyncio.Transport):
         self.userTempBanCache = []
         self.staffChat = []
         
+        # Event
+        self.furscore1 = "0"
+        self.furscore2 = "0"
 
         # Dict
         self.rooms = {}
@@ -2214,6 +2287,8 @@ class Server(asyncio.Transport):
         T.cprint(1,  0,  "False\n" if self.config("game.debug") == "0" else "True\n")
         T.cprint(15, 0, "[#] Loaded Minigames (Official / Semi-Official): ")
         T.cprint(5,  0,  "(" + str(len(self.officialminigames)) + " / " +  str(len(self.minigames) - len(self.officialminigames)) + ")\n")
+        T.cprint(15, 0, "[#] Server Maximum Players: ")
+        T.cprint(3,  0,  self.config("game.maximumplayers") + "\n")
         self.loop.call_later(1, self.loop.create_task, self.loadRecords())
         self.loop.run_forever() 
 
@@ -2890,7 +2965,6 @@ class Room:
         
         # Dict
         self.clients = {}
-        self.funcorpNames = {}
         self.currentTimers = {}
         self.currentShamanSkills = {}
         self.currentSecondShamanSkills = {}
@@ -3559,9 +3633,6 @@ class Room:
                         self.currentShamanSkills = player.playerSkills
                         break
         return self.currentShamanCode
-
-    def getSourisCount(self):
-        return len(list(filter(lambda player: player.isGuest, self.clients.copy().values())))
 
     def getSyncCode(self):
         if self.getPlayerCount() > 0:

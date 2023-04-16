@@ -99,7 +99,7 @@ class Missions:
             self.client.sendPacket(Identifiers.send.Complete_Mission, ByteArray().writeByte(237).writeByte(129).writeByte(0).writeShort(self.missionsCompleted).writeShort(20).writeInt(20).writeShort(0).toByteArray())
             self.client.shopFraises += 20
             self.missionsCompleted = 0
-            self.updateMissions(True)
+            self.updateMissions()
         else:
             self.client.sendPacket(Identifiers.send.Complete_Mission, ByteArray().writeByte(237).writeByte(129).writeByte(0).writeShort(self.missionsCompleted).writeShort(20).writeInt(20).writeShort(1).toByteArray())
 
@@ -110,7 +110,7 @@ class Missions:
             self.client.sendPacket(Identifiers.send.Complete_Mission, ByteArray().writeShort(missionID).writeByte(0).writeShort(mission[2]).writeShort(mission[3]).writeShort(mission[4]).writeShort(0).toByteArray())
             del self.playerMissions[missionID]
             self.randomMission()
-            self.updateMissions(True)
+            self.updateMissions()
             self.missionsCompleted += 1
             self.upMissionAD()
             
@@ -124,7 +124,7 @@ class Missions:
             p.writeShort(mission[3])
             p.writeShort(mission[4])
             p.writeShort(0)
-            p.writeBoolean(True) #self.client.canChangeMission
+            p.writeBoolean(False) #self.client.canChangeMission
             
         # 4
         p.writeByte(237)

@@ -29,15 +29,12 @@ class Commands:
         self.commands = {}
         self.__init_2()
         
-    def requireLevel(self, level=0, roomOwner=False, roomStrm=False, funcorpRoom=False, lua=False, mc=False, fc=False, arb=False, fs=False):
+    def requireLevel(self, level=0, roomOwner=False, roomStrm=False, lua=False, mc=False, fc=False, arb=False, fs=False):
         if self.client.room.isTribeHouse and self.client.privLevel < 6:
             return self.requireTribePerm(2046)
         elif roomStrm and not self.client.privLevel >= 5 and not self.client.isFunCorpPlayer and not self.client.isArbitre:
             if self.client.room.roomName == "*strm_" + self.client.playerName:
                 return True
-        elif funcorpRoom and self.client.privLevel != 9:
-            if self.client.room.isFuncorp == True:
-                return self.client.isFunCorpPlayer
         elif roomOwner and self.client.privLevel < 6:
             return self.client.room.roomCreator == self.client.playerName or (self.client.isMapCrew if mc else False)
         return self.client.privLevel >= level or (self.client.isLuaCrew if lua else False) or (self.client.isMapCrew if mc else False) or (self.client.isFunCorpPlayer if fc else False) or (self.client.isArbitre if arb else False) or (self.client.isFashionSquad if fs else False)
@@ -59,18 +56,18 @@ class Commands:
     def requireOwner(self):
         return self.client.playerName in self.owners
     
-    def command(self,func=None,tribe=False,args=0,level=0,owner=False,roomOwner=False,roomStrm=False,funcorpRoom=False,lua=False,mc=False,fc=False,arb=False,fs=False,alies=[],reqrs=[]):
+    def command(self,func=None,tribe=False,args=0,level=0,owner=False,roomOwner=False,roomStrm=False,lua=False,mc=False,fc=False,arb=False,fs=False,alies=[],reqrs=[]):
         if not func:
             reqrs=[]
             if isinstance(level, list):
                 for levelid in level:
-                    if levelid > 0: reqrs.append(['level',(levelid,roomOwner,roomStrm,funcorpRoom,lua,mc,fc,arb,fs)])
+                    if levelid > 0: reqrs.append(['level',(levelid,roomOwner,roomStrm,lua,mc,fc,arb,fs)])
             else:
-                if level > 0: reqrs.append(['level',(level,roomOwner,roomStrm,funcorpRoom,lua,mc,fc,arb,fs)])
+                if level > 0: reqrs.append(['level',(level,roomOwner,roomStrm,lua,mc,fc,arb,fs)])
             if tribe > 0: reqrs.append(['tribe',tribe])
             if args > 0: reqrs.append(['args',args])
             if owner: reqrs.append(['owner'])
-            return lambda x: self.command(x,tribe,args,level,owner,roomOwner,roomStrm,funcorpRoom,lua,mc,fc,arb,fs,alies,reqrs)
+            return lambda x: self.command(x,tribe,args,level,owner,roomOwner,roomStrm,lua,mc,fc,arb,fs,alies,reqrs)
         else:
             for i in alies + [func.__name__]: self.commands[i] = [reqrs,func]
     
@@ -81,6 +78,7 @@ class Commands:
         argsCount = len(args)
         self.argsNotSplited = " ".join(args)
         self.currentArgsCount = argsCount
+        self.commandName = command
         self.Cursor['commandlog'].insert_one({'Time':Utils.getTime(),'Username':self.client.playerName,'Command':command})
         if command in self.commands:
             for i in self.commands[command][0]: 
@@ -216,7 +214,7 @@ class Commands:
             staffMessage = "$ModoPasEnLigne"
             staffMembers = {}
             for player in self.server.players.copy().values():
-                if player.privLevel == 9:
+                if player.privLevel == 8:
                     if player.langue.lower() in staffMembers:
                         names = staffMembers[player.langue.lower()]
                         names.append(player.playerName)
@@ -424,6 +422,47 @@ class Commands:
 
 # Funcorp Commands
         @self.command(level=[5, 9], fc=True, roomStrm=True)
+        async def changesize(self, *args):
+            if self.client.room.isFuncorp:
+                dump = []
+                players = []
+                msg = []
+                size = 0
+                for arg in args:
+                    dump.append(arg)
+
+                if dump[0] == "*":
+                    if dump[1] == "off":
+                        for player in self.client.room.clients.copy().values():
+                            self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(100).writeBoolean(False).toByteArray())
+                        self.client.sendClientMessage("All players now have their regular size.", 1)
+                    else:
+                        size = int(dump[1])
+                        if size >= 1500: size = 100
+                        for player in self.client.room.clients.copy().values():
+                            self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(size).writeBoolean(False).toByteArray())
+                        self.client.sendClientMessage("All players now have the same size: <BV>" + str(size) + "</BV>.", 1)
+                else:
+                    for argument in dump[:-1]:
+                        player = self.client.room.clients.get(argument)
+                        if player != None:
+                            players.append(player)
+                    if dump[-1] == "off":
+                        for player in players:
+                            self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(100).writeBoolean(False).toByteArray())
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"The following players now have their regular size: <BV>{', '.join(map(str, msg))}</BV>", 1)
+                    else:
+                        size = int(dump[-1])
+                        if size >= 1500: size = 100
+                        for player in players:
+                            self.client.room.sendAll(Identifiers.send.Mouse_Size, ByteArray().writeInt(player.playerCode).writeUnsignedShort(size).writeBoolean(False).toByteArray())
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"The following players now have the size {str(size)}: <BV>{', '.join(map(str, msg))}</BV>", 1)
+            else:
+                self.client.playerException.Invoke("requireFC")
+
+        @self.command(level=[5, 9], fc=True, roomStrm=True)
         async def funcorp(self, showhelp=''):
             if self.currentArgsCount == 0:
                 if self.client.room.isFuncorp:
@@ -432,7 +471,6 @@ class Commands:
                         self.client.room.isFuncorp = False
                         player.mouseName = ""
                         player.tempMouseColor = ""
-                        self.client.room.funcorpNames.clear()
                 else:
                     for player in self.client.room.clients.copy().values():
                         player.sendLangueMessage("", "<FC>$FunCorpActive</FC>")
@@ -443,6 +481,45 @@ class Commands:
                         self.client.sendLogMessage(self.FunCorpPlayerCommands()) # strm_
                     else:
                         self.client.sendLogMessage(self.FunCorpMemberCommands()) # FC member
+
+        @self.command(level=[5, 9], fc=True, roomStrm=True)
+        async def linkmice(self, *args):
+            if self.client.room.isFuncorp:
+                dump = []
+                msg = []
+                players = []
+            
+                for arg in args:
+                    dump.append(arg)
+                
+                if dump[0] == "*":
+                    if self.currentArgsCount == 2:
+                        if dump[1] == "off":
+                            for player in self.client.room.clients.copy().values():
+                                self.client.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(False).writeInt(player.playerCode).writeInt(self.client.playerCode).toByteArray())
+                            self.client.sendClientMessage("All the links have been removed.", 1)
+                    else:
+                        for player in self.client.room.clients.copy().values():
+                            self.client.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(True).writeInt(player.playerCode).writeInt(self.client.playerCode).toByteArray())
+                        self.client.sendClientMessage("All the players are now linked.", 1)
+                        
+                else:
+                    for argument in dump:
+                        player = self.client.room.clients.get(argument)
+                        if player != None:
+                            players.append(player)
+                    if dump[-1] == "off":
+                        for player in players:
+                            self.client.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(False).writeInt(player.playerCode).writeInt(players[0].playerCode).toByteArray())
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"The links involving the following players have been removed: <BV>{', '.join(map(str, msg))}</BV>", 1)
+                    else:
+                        for player in players:
+                            self.client.room.sendAll(Identifiers.send.Soulmate, ByteArray().writeBoolean(True).writeInt(player.playerCode).writeInt(players[0].playerCode).toByteArray())
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"The following players are now linked: <BV>{', '.join(map(str, msg))}</BV>", 1)
+            else:
+                self.client.playerException.Invoke("requireFC") 
 
         @self.command(level=5, fc=True)
         async def lsfc(self):
@@ -455,6 +532,43 @@ class Commands:
             else:
                 self.client.sendClientMessage("Don't have any online Fun Corps at moment.", 1)
 
+        @self.command(level=[5, 9], fc=True, roomStrm=True)
+        async def meep(self, *args):
+            if self.client.room.isFuncorp:
+                dump = []
+                players = []
+                msg = []
+                for arg in args:
+                    dump.append(arg)
+
+                if dump[0] == "*":
+                    if self.currentArgsCount == 2:
+                        if dump[1] == "off":
+                            for player in self.client.room.clients.copy().values():
+                                player.sendPacket(Identifiers.send.Can_Meep, 0)
+                            self.client.sendClientMessage("All the meep powers have been removed.", 1)
+                    else:
+                        for player in self.client.room.clients.copy().values():
+                            player.sendPacket(Identifiers.send.Can_Meep, 1)
+                        self.client.sendClientMessage("Meep powers given to all players in the room.", 1)
+                else:
+                    for argument in dump:
+                        player = self.client.room.clients.get(argument)
+                        if player != None:
+                            players.append(player)
+                    if dump[-1] == "off":
+                        for player in players:
+                            player.sendPacket(Identifiers.send.Can_Meep, 0)
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"Meep powers removed from players: <BV>{', '.join(map(str, msg))}</BV>", 1)
+                    else:
+                        for player in players:
+                            player.sendPacket(Identifiers.send.Can_Meep, 1)
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"Meep powers given to players: <BV>{', '.join(map(str, msg))}</BV>", 1)
+            else:
+                self.client.playerException.Invoke("requireFC")
+
         @self.command(level=[5, 9], fc=True)
         async def roomevent(self):
             if self.client.room.isFuncorp:
@@ -463,8 +577,47 @@ class Commands:
             else:
                 self.client.playerException.Invoke("requireFC")
 
-        @self.command(level=[5, 8, 9], fc=True)
+        @self.command(level=[5, 9], fc=True, roomStrm=True)
+        async def transformation(self, *args):
+            if self.client.room.isFuncorp:
+                dump = []
+                players = []
+                msg = []
+                for arg in args:
+                    dump.append(arg)
+
+                if dump[0] == "*":
+                    if self.currentArgsCount == 2:
+                        if dump[1] == "off":
+                            for player in self.client.room.clients.copy().values():
+                                player.sendPacket(Identifiers.send.Can_Transformation, 0)
+                            self.client.sendClientMessage("All the transformations powers have been removed.", 1)
+                    else:
+                        for player in self.client.room.clients.copy().values():
+                            player.sendPacket(Identifiers.send.Can_Transformation, 1)
+                        self.client.sendClientMessage("Transformations powers given to all players in the room.", 1)
+                else:
+                    for argument in dump:
+                        player = self.client.room.clients.get(argument)
+                        if player != None:
+                            players.append(player)
+                    if dump[-1] == "off":
+                        for player in players:
+                            player.sendPacket(Identifiers.send.Can_Transformation, 0)
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"Transformations powers removed to players: <BV>{', '.join(map(str, msg))}</BV>", 1)
+                    else:
+                        for player in players:
+                            player.sendPacket(Identifiers.send.Can_Transformation, 1)
+                            msg.append(player.playerName)
+                        self.client.sendClientMessage(f"Transformations powers given to players: <BV>{', '.join(map(str, msg))}</BV>", 1)
+            else:
+                self.client.playerException.Invoke("requireFC")
+
+        @self.command(level=5, fc=True)
         async def tropplein(self, players=0):
+            if (self.client.privLevel == 5 or self.client.isFunCorpPlayer) and not self.client.room.isFuncorp:
+                return
             if self.currentArgsCount == 0:
                 self.client.sendClientMessage("The current maximum number of players is: <BV>"+str(self.client.room.roomDetails[8]) + "</BV>", 1)
             else:
@@ -511,7 +664,7 @@ class Commands:
                 mapInfo = await self.client.room.getMapInfo(int(code[1:]))
                 if mapInfo[0] == None:
                     self.client.sendLangueMessage("", "$ChargementCarteInconnue")
-                    self.client.sendLangueMessage("", "$CarteIntrouvable2", code)
+                    self.client.sendLangueMessage("", f"$ProchaineCarte : {mapInfo[0]} - {code}")
                     return
 
                 self.client.room.forceNextMap = code
@@ -524,7 +677,7 @@ class Commands:
                 mapInfo = await self.client.room.getMapInfo(int(code[1:]))
                 if mapInfo[0] == None:
                     self.client.sendLangueMessage("", "$ChargementCarteInconnue")
-                    self.client.sendLangueMessage("", "$CarteIntrouvable2", code)
+                    self.client.sendLangueMessage("", f"$ProchaineCarte : Vanilla - {code}")
                     return
             
                 self.client.room.forceNextMap = f"{code}"
@@ -549,7 +702,7 @@ class Commands:
                     return
                     
                 self.client.room.forceNextMap = code
-                self.client.sendLangueMessage("", f"$ProchaineCarte : {code}")
+                self.client.sendLangueMessage("", f"$ProchaineCarte : {mapInfo[0]} - {code}")
             elif code.isdigit():
                 mapInfo = await self.client.room.getMapInfo(code)
                 if mapInfo[0] == '':
@@ -558,60 +711,99 @@ class Commands:
                     return
             
                 self.client.room.forceNextMap = f"{code}"
-                self.client.sendLangueMessage("", f"$ProchaineCarte : {code}")
+                self.client.sendLangueMessage("", f"$ProchaineCarte : Vanilla - {code}")
 
 
 
 # Arbitre Commands
+        @self.command(level=1)
+        async def ban(self, playerName, hours=24, *args):
+            if self.client.room.roomName == "*strm_" + self.client.playerName: # STRM support
+                player = self.server.players.get(playerName)
+                if player != None and player.roomName == self.client.roomName:
+                    player.enterRoom(self.server.recommendRoom(player.langue))
+            elif self.currentArgsCount == 1: # Vote Populaire Support
+                self.server.voteBanPopulaire(playerName, self.client.playerName, self.client.ipAddress)
+            else:
+                if self.client.privLevel >= 7 or self.client.isArbitre:
+                    result = self.server.checkBanUser(playerName)
+                    if result == -1:
+                        reason = self.argsNotSplited.split(" ", 2)[2]
+                        if self.server.checkConnectedAccount(playerName):
+                            self.client.sendClientMessage(f"The player {playerName} got banned for {hours}h ({reason})", 1)
+                            self.client.sendServerMessageOthers(f"{self.client.playerName} banned the player {playerName} for {hours}h ({reason}).")
+                            self.server.banPlayer(playerName, int(hours), reason, self.client.playerName, False)
+                        else:
+                            self.client.sendClientMessage(f"The player {playerName} got banned for {hours}h ({reason})", 1)
+                            self.client.sendServerMessageOthers(f"{self.client.playerName} offline banned the player {playerName} for {hours}h ({reason}).")
+                            self.server.banPlayer(playerName, int(hours), reason, self.client.playerName, False)
+                    elif result == 1:
+                        self.client.playerException.Invoke("useralreadybanned", playerName)
+                    else:
+                        self.client.playerException.Invoke("unknownuser")
+
         @self.command(level=7, arb=True, args=1)
         async def banhack(self, playerName):
             player = self.server.players.get(playerName)
             if player != None:
-                hours = self.getTotalBanHours(playerName) // 360
+                hours = self.server.getTotalBanHours(playerName) // 360
                 if hours <= 0:
                     hours = 1
                 hours *= 360
                 reason = "Hack. Your account will be permanently banned if you continue to violate the rules!"
-                player.sendPlayerBan(hours, reason)
+                t = self.server.fastRacingRecords
+                if playerName in t["records"]:
+                    s = [playerName,len(t["records"][playerName])]
+                    if s in t["sequentialrecords"]:
+                        index = t["sequentialrecords"].index(s)
+                        t["sequentialrecords"].pop(index)
+                    for mapcode in t["records"][playerName]:
+                        if mapcode in t["recordmap"]:
+                            del t["recordmap"][mapcode]
+                    del t["records"][playerName]
+                    await self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ? where Player = ?", [0, "", 0, playerName])
                 self.server.banPlayer(player.playerName, hours, reason, self.client.playerName, False)
                 self.client.sendServerMessageOthers("%s banned the player %s for %sh (%s)" %(self.client.playerName, playerName, hours, reason))
             else:
                 self.client.playerException.Invoke("unknownuser")
 
         @self.command(level=7, args=1, arb=True)
-        async def casier(self, playerName):
-            player = self.server.players.get(playerName)
-            if player != None:
-                try:
-                    message = "<p align='center'><N>Sanction Logs for <V>"+player.playerName+"</V></N>\n</p><p align='left'>Currently running sanctions: </p><br>"
-                    r = self.Cursor['casierlog'].find({})
-                    for rs in r[0:200]:
-                        name,ip,state,timestamp,modName,time,reason = rs['Name'],rs['IP'],rs['State'],rs['Timestamp'],rs['Moderator'],rs['Time'],rs['Reason']
-                        fromtime = str(datetime.fromtimestamp(float(int(timestamp))))
-                        ip = Utils.EncodeIP(player.ipAddress)
-                        if time == '': time = 0
-                        sanctime = (int(time)*60*60)
-                        totime = datetime.fromtimestamp(float(int(timestamp) + sanctime))
-                        totime1 = datetime.utcfromtimestamp(float(int(timestamp) + sanctime))
-                        if state in ["UNMUTE", "UNBAN"]:
-                            message = message + "<G><font size='12'><p align='left'> - </G><G><b>" + state + "</b> (" + str(ip) + ") by " + modName + "</font></G>\n"
-                            message = message + "<G><p align='left'><font size='9'>    " + fromtime + "</font></G>\n\n"
-                        elif state == "MUMUTE":
-                            message = message + "<N><font size='12'><p align='left'> - <b><V></N>" + state + " " + str(time) + "h</V></b><N> (" + str(ip) + ") by " + modName + " : <BL>" + reason + "</BL>\n"
-                            message = message + "<p align='left'><font size='9'>    " + fromtime + "</font>\n\n"
+        async def casier(self, xxx):
+            st = False
+            try:
+                message = "<p align='center'><N>Sanction Logs for <V>"+xxx+"</V></N>\n</p><p align='left'>Currently running sanctions: </p><br>"
+                if xxx.startswith('#') and '.' in xxx:
+                    r = self.Cursor['casierlog'].find({"IP":xxx})
+                else:
+                    r = self.Cursor['casierlog'].find({"Name":xxx})
+                for rs in r[0:200]:
+                    st = True
+                    name,ip,state,timestamp,modName,time,reason = rs['Name'],rs['IP'],rs['State'],rs['Timestamp'],rs['Moderator'],rs['Time'],rs['Reason']
+                    fromtime = str(datetime.fromtimestamp(float(int(timestamp))))
+                    if time == '': time = 0
+                    sanctime = (int(time)*60*60)
+                    totime = datetime.fromtimestamp(float(int(timestamp) + sanctime))
+                    totime1 = datetime.utcfromtimestamp(float(int(timestamp) + sanctime))
+                    if state in ["UNMUTE", "UNBAN"]:
+                        message = message + "<G><font size='12'><p align='left'> - </G><G><b>" + state + "</b> (" + str(ip) + ") by " + modName + "</font></G>\n"
+                        message = message + "<G><p align='left'><font size='9'>    " + fromtime + "</font></G>\n\n"
+                    elif state == "MUMUTE":
+                        message = message + "<N><font size='12'><p align='left'> - <b><V></N>" + state + " " + str(time) + "h</V></b><N> (" + str(ip) + ") by " + modName + " : <BL>" + reason + "</BL>\n"
+                        message = message + "<p align='left'><font size='9'>    " + fromtime + "</font>\n\n"
+                    else:
+                        message = message + "<N><font size='12'><p align='left'> - <b><V></N>" + state + " " + str(time) + "h</V></b><N> (" + str(ip) + ") by " + modName + " : <BL>" + reason + "</BL>\n"
+                        if totime1 != None:
+                            message = message + "<p align='left'><font size='9'><N2>    " + fromtime + " | "+ str(totime) + " → "+ str(totime1) + "</N2>\n\n"
+                        elif totime != None:
+                            message = message + "<p align='left'><font size='9'><N2>    " + fromtime + " → "+ str(totime) + "</N2>\n\n"
                         else:
-                            message = message + "<N><font size='12'><p align='left'> - <b><V></N>" + state + " " + str(time) + "h</V></b><N> (" + str(ip) + ") by " + modName + " : <BL>" + reason + "</BL>\n"
-                            if totime1 != None:
-                                message = message + "<p align='left'><font size='9'><N2>    " + fromtime + " | "+ str(totime) + " → "+ str(totime1) + "</N2>\n\n"
-                            elif totime != None:
-                                message = message + "<p align='left'><font size='9'><N2>    " + fromtime + " → "+ str(totime) + "</N2>\n\n"
-                            else:
-                                message = message + "<p align='left'><font size='9'><N2>    " + fromtime + "</N2>\n\n"
+                            message = message + "<p align='left'><font size='9'><N2>    " + fromtime + "</N2>\n\n"
+                if st:
                     self.client.sendLogMessage(message)
-                except:
-                    self.client.sendClientMessage("There has been an error when retrieving the list of sanctions of the player "+player.playerName+" : PARAMETRE_INVALIDE.", 1)
-            else:
-                self.client.playerException.Invoke("unknownuser")
+                else:
+                    self.client.playerException.Invoke("unknownuserorip")
+            except:
+                self.client.sendClientMessage("There has been an error when retrieving the list of sanctions of the player "+xxx+" : PARAMETRE_INVALIDE.", 1)
 
         @self.command(level=7, arb=True)
         async def chatfilter(self, option, *args):
@@ -646,15 +838,18 @@ class Commands:
             if self.server.checkConnectedAccount(playerName):
                 player = self.server.players.get(playerName)
                 if player != None:
-                    player.voteBan = []
-                    self.client.sendServerMessageOthers(f"{self.client.playerName} removed all ban votes of {playerName}.")
-                    self.client.sendClientMessage(f"Successfully removed all ban votes of {playerName}", 1)
+                    if len(player.voteBan) > 0:
+                        player.voteBan = []
+                        self.client.sendServerMessageOthers(f"{self.client.playerName} removed all ban votes of {playerName}.")
+                        self.client.sendClientMessage(f"Successfully removed all ban votes of {playerName}", 1)
+                    else:
+                        self.client.sendClientMessage(f"{playerName} does not contains any ban votes.", 1)
                 else:
                      self.client.playerException.Invoke("unknownuser")
 
         @self.command(level=[5, 7, 8, 9], arb=True, fc=True)
         async def closeroom(self, *args):
-            if self.client.privLevel == 5 or self.client.isFunCorpPlayer and not self.client.room.isFuncorp:
+            if (self.client.privLevel == 5 or self.client.isFunCorpPlayer) and not self.client.room.isFuncorp and self.currentArgsCount > 0:
                 return
             if self.currentArgsCount > 0:
                 roomName = self.argsNotSplited.split(" ", 0)[0]
@@ -683,8 +878,15 @@ class Commands:
                 self.client.sendClientMessage(f"The community {community} is invalid.", 1)
 
         @self.command(level=7)
-        async def creator(self):
-            self.client.sendClientMessage("Room [<J>"+self.client.room.name+"</J>]'s creator: <BV>"+self.client.room.roomCreator+"</BV>", 1)
+        async def creator(self, roomName=''):
+            if roomName == '':
+                self.client.sendClientMessage("Room [<J>"+self.client.room.name+"</J>]'s creator: <BV>"+self.client.room.roomCreator+"</BV>", 1)
+            else:
+                for room in self.server.rooms.values():
+                    if room.community == roomName[0:2] and room.roomName == roomName[3:]:
+                        self.client.sendClientMessage(f"Room [<J>{roomName}</J>]'s creator: <BV>"+room.roomCreator+"</BV>", 1)
+                        return
+                self.client.sendClientMessage(f"Room [<J>{roomName}</J>] does not exist.", 1)
 
         @self.command(level=7, arb=True, args=1, alies=['removerecord'])
         async def delrecord(self, mapCode):
@@ -694,7 +896,7 @@ class Commands:
             else:
                 self.client.playerException.Invoke("norecordfound")
 
-        @self.command(level=7, arb=True, args=1)
+        @self.command(level=7, arb=True, args=1, alies=['chercher'])
         async def find(self, text):
             result = ""
             for player in self.server.players.copy().values():
@@ -711,16 +913,44 @@ class Commands:
             else:
                 self.client.playerException.Invoke("unknownuser")
 
+        @self.command(level=7, arb=True)
+        async def iban(self, playerName, hours, *args):
+            result = self.server.checkBanUser(playerName)
+            if result == -1:
+                reason = self.argsNotSplited.split(" ", 2)[2]
+                if self.server.checkConnectedAccount(playerName):
+                    self.client.sendClientMessage(f"The player {playerName} got banned for {hours}h ({reason}).", 1)
+                    self.client.sendServerMessageOthers(f"{self.client.playerName} banned the player {playerName} for {hours}h ({reason}).")
+                    self.server.banPlayer(playerName, int(hours), reason, self.client.playerName, True)
+                else:
+                    self.client.sendClientMessage(f"The player {playerName} got banned for {hours}h ({reason}).", 1)
+                    self.client.sendServerMessageOthers(f"{self.client.playerName} offline banned the player {playerName} for {hours}h ({reason}).")
+                    self.server.banPlayer(playerName, int(hours), reason, self.client.playerName, True)
+            elif result == 1:
+                self.client.playerException.Invoke("useralreadybanned", playerName)
+            else:
+                self.client.playerException.Invoke("unknownuser")
+
         @self.command(level=7, arb=True, args=1)
         async def ibanhack(self, playerName):
             player = self.server.players.get(playerName)
             if player != None:
-                hours = self.getTotalBanHours(playerName) // 360
+                hours = self.server.getTotalBanHours(playerName) // 360
                 if hours <= 0:
                     hours = 1
                 hours *= 360
                 reason = "Hack. Your account will be permanently banned if you continue to violate the rules!"
-                player.sendPacket(Identifiers.old.send.Player_Ban, [3600000 * hours, reason])
+                t = self.server.fastRacingRecords
+                if playerName in t["records"]:
+                    s = [playerName,len(t["records"][playerName])]
+                    if s in t["sequentialrecords"]:
+                        index = t["sequentialrecords"].index(s)
+                        t["sequentialrecords"].pop(index)
+                    for mapcode in t["records"][playerName]:
+                        if mapcode in t["recordmap"]:
+                            del t["recordmap"][mapcode]
+                    del t["records"][playerName]
+                    await self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ? where Player = ?", [0, "", 0, playerName])
                 self.server.banPlayer(player.playerName, hours, reason, self.client.playerName, True)
                 self.client.sendServerMessageOthers("%s banned the player %s for %sh (%s)" %(self.client.playerName, playerName, hours, reason))
             else:
@@ -732,13 +962,44 @@ class Commands:
                 if self.server.checkTempMute(playerName):
                     self.client.playerException.Invoke("useralreadymuted", playerName)
                 else:
-                    reason = self.argsNotSplited.split(" ", 0)[2]
+                    reason = self.argsNotSplited.split(" ", 2)[2]
                     mutehours = int(hours) if hours.isdigit() else 1
                     mutehours = 9999999 if (mutehours > 9999999) else mutehours
                     self.server.mutePlayer(playerName, mutehours, reason, self.client.playerName, True, True)
                     self.client.sendClientMessage(f"The player {playerName} got muted", 1)
             else:
                 self.client.playerException.Invoke("unknownuser")
+
+        @self.command(level=7)
+        async def infotribu(self, *args):
+            tribeName = self.argsNotSplited.split(" ", 0)[0]
+            message = f"<p align='center'>Tribe <J>{tribeName}</J><BR>"
+            r = self.Cursor['tribe'].find({'Name':tribeName})
+            for rs in r:
+                totalmembers = len(self.client.tribulle.getTribeMembers(rs["Code"]))
+                tribehouse = str(rs["House"])
+                tribeid = str(rs["Code"])
+                message += "<p align='left'><N>Id:</N> <R>%s</R><BR><N>Tribehouse map : @%s</N><BR><BR><N>Members: %s</N><BR>" % (tribeid, tribehouse, totalmembers)
+                for member in self.client.tribulle.getTribeMembers(rs["Code"]):
+                    tribeRank = self.client.tribulle.getPlayerTribeRank(member)
+                    rankInfo = rs["Ranks"].split(";")
+                    rankName = rankInfo[tribeRank].split("|")
+                    pl1 = self.server.players.get(member)
+                    if pl1 != None:
+                        message += f"<N>-<N> <V>{member}</V> : <BL>{rankName[1]}</BL> <N>(</N><font color = '{pl1.ipDetails[3]}'>{Utils.EncodeIP(pl1.ipAddress)}</font><N> / {pl1.roomName})</N>\n"
+                    else:
+                        message += f"<N>-<N> <V>{member}</V> : <BL>{rankName[1]}</BL>\n"
+                message += "<BR><N>Ranks & rights:</N><BR>"
+                perms = []
+                for i in range(0, 10):
+                    ranks = rs["Ranks"].split(";")
+                    ranks = ranks[i].split("|")
+                    rankid = int(ranks[2])
+                    message += "<N> - </N><V>"+str(ranks)+"</V>\n"
+            if message != f"<p align='center'>Tribe <J>{tribeName}</J><BR>":
+                self.client.sendLogMessage(message)
+            else:
+                self.client.sendClientMessage(f"The tribe <BV>{tribeName}</BV> does not exist.", 1)
 
         @self.command(level=7, args=1, arb=True)
         async def ip(self, playerName):
@@ -791,6 +1052,46 @@ class Commands:
                     self.client.sendLogMessage(message)
 
         @self.command(level=7, arb=True)
+        async def ls(self, *args):
+            if self.currentArgsCount == 0:
+                data = []
+                for room in self.server.rooms.values():
+                    bulle = "bulle" + str(room.bulle_id)
+                    if room.name.startswith("*") and not room.name.startswith("*" + chr(3)):
+                        data.append(["xx", room.name, room.getPlayerCount(), bulle if not room.isTribeHouse else "maison"])
+                    elif room.name.startswith(str(chr(3))) or room.name.startswith("*" + chr(3)):
+                        if room.name.startswith(("*" + chr(3))):
+                            data.append(["xx", room.name, room.getPlayerCount(), bulle if not room.bulle_id == 8 else "maison"])
+                        else:
+                            data.append(["*", room.name, room.getPlayerCount(), bulle if not room.bulle_id == 8 else "maison"])
+                    else:
+                        data.append([room.community, room.roomName, room.getPlayerCount(), bulle if not room.bulle_id == 8 else "maison"])
+                result = "<N>List of rooms:</N>"
+                for roomInfo in data:
+                    if roomInfo[3] == "maison":
+                        result += "\n<BL>%s</BL> <G>(%s / %s) :</G> <V>%s</V>" % (roomInfo[1] ,str.lower(roomInfo[0]), roomInfo[3], roomInfo[2])
+                    else:
+                        result += "\n<BL>%s-%s</BL> <G>(%s / %s) :</G> <V>%s</V>" % (str.lower(roomInfo[0]), roomInfo[1] ,str.lower(roomInfo[0]), roomInfo[3], roomInfo[2])
+                result += "\n<J>Total players:</J> <R>%s</R>" %(len(self.server.players))
+                self.client.sendLogMessage(result)
+            else:
+                roomName = self.argsNotSplited.split(" ", 0)[0] if (len(args) >= 1) else ""
+                totalusers = 0
+                users, rooms, message = 0, [], ""
+                for room in self.server.rooms.values():
+                    bulle = "bulle" + str(room.bulle_id)
+                    if room.name.find(roomName) != -1 or room.name.startswith(roomName):
+                        rooms.append([room.name, room.community, room.getPlayerCount(), bulle if not room.bulle_id == 8 else "maison"])
+                        
+                message += "<N>List of rooms matching [%s]:</N>" % (roomName)
+                for roomInfo in rooms:
+                    message += "\n"
+                    message += "<BL>%s <G>(%s / %s)</G> : <V>%s</V>" % (str.lower(roomInfo[0]), str.lower(roomInfo[1]), roomInfo[3], roomInfo[2])
+                    totalusers = totalusers + roomInfo[2]
+                message += "\n<J>Total players:</J> <R>%s</R>" % (totalusers)
+                self.client.sendLogMessage(message)
+
+        @self.command(level=7, arb=True)
         async def lsarb(self):
             Arbitres = ""
             for player in self.server.players.copy().values():
@@ -800,6 +1101,21 @@ class Commands:
                 self.client.sendMessage(Arbitres.rstrip("\n"))
             else:
                 self.client.sendClientMessage("Don't have any online Arbitres at moment.", 1)
+
+        @self.command(level=7, arb=True)
+        async def lsc(self):
+            result = {}
+            for room in self.server.rooms.values():
+                if room.community in result:
+                    result[room.community] = result[room.community] + room.getPlayerCount()
+                else:
+                    result[room.community] = room.getPlayerCount()
+            message = ""
+            for community in result.items():
+                if community[1] > 0:
+                    message += "<BL>%s:<BL> <V>%s</V>\n" %(community[0].upper(), community[1])
+            message += "<J>Total players:</J> <R>%s</R>" %(sum(result.values()))
+            self.client.sendLogMessage(message)
 
         @self.command(level=7, arb=True)
         async def lsmodo(self):
@@ -852,7 +1168,7 @@ class Commands:
                 if self.server.checkTempMute(playerName):
                     self.client.playerException.Invoke("useralreadymuted", playerName)
                 else:
-                    reason = self.argsNotSplited.split(" ", 0)[2]
+                    reason = self.argsNotSplited.split(" ", 2)[2]
                     mutehours = int(hours) if hours.isdigit() else 1
                     mutehours = 9999999 if (mutehours > 9999999) else mutehours
                     self.server.mutePlayer(playerName, mutehours, reason, self.client.playerName, True, False)
@@ -904,7 +1220,7 @@ class Commands:
                     self.client.sendClientMessage(f"{player.playerName} got unprisoned.", 1)
                     player.enterRoom("1")
                 else:
-                    player.enterRoom("*Bad Girls")
+                    player.enterRoom(self.client.roomName)
                     player.isPrisoned = True
                     self.client.sendServerMessageOthers(f"{player.playerName} prisoned by {self.client.playerName}.")
                     self.client.sendClientMessage(f"{player.playerName} got prisoned.", 1)
@@ -938,7 +1254,7 @@ class Commands:
             else:
                 self.client.playerException.Invoke("unknownuser")
 
-        @self.command(level=[5, 7, 8, 9], arb=True, args=1, alies=["room*", "salon*", "sala*"])
+        @self.command(level=5, arb=True, args=1, alies=["room*", "salon*", "sala*"])
         async def __commande_roomasterisk(self, roomName):
             community = roomName[0:2].upper()
             try:
@@ -948,8 +1264,10 @@ class Commands:
             except:
                 self.client.sendClientMessage(f"The community {community} is invalid.", 1)
 
-        @self.command(level=7, arb=True, fc=True)
+        @self.command(level=[5, 7, 8, 9], arb=True, fc=True, args=1)
         async def roomkick(self, playerName):
+            if (self.client.privLevel == 5 or self.client.isFunCorpPlayer) and not self.client.room.isFuncorp:
+                return
             player = self.server.players.get(playerName)
             if player != None:
                 self.client.sendServerMessageOthers(f"{player.playerName} has been roomkicked from [{str.lower(player.room.name)}] by {self.client.playerName}.")
@@ -976,7 +1294,7 @@ class Commands:
             else:
                 self.client.playerException.Invoke("unknownuser")
 
-        @self.command(level=7, arb=True, args=1, alies=['desbanip'])
+        @self.command(level=7, arb=True, args=1, alies=['debanip'])
         async def unbanip(self, ipAddress):
             decip = Utils.DecodeIP(ip)
             if decip in self.server.IPPermaBanCache:
@@ -1007,68 +1325,6 @@ class Commands:
                 self.client.playerException.Invoke("unknownuser")
 
 
-
-
-    
-
-        @self.command(level=7, arb=True)
-        async def lsc(self):
-            result = {}
-            for room in self.server.rooms.values():
-                if room.community in result:
-                    result[room.community] = result[room.community] + room.getSourisCount()
-                else:
-                    result[room.community] = room.getSourisCount()
-            message = ""
-            for community in result.items():
-                if community[1] > 0:
-                    message += "<BL>%s:<BL> <V>%s</V>\n" %(community[0].upper(), community[1])
-            message += "<J>Total players:</J> <R>%s</R>" %(sum(result.values()))
-            self.client.sendLogMessage(message)
-
-
-        @self.command(level=7, arb=True)
-        async def ls(self, *args):
-            if self.currentArgsCount == 0:
-                data = []
-                for room in self.server.rooms.values():
-                    bulle = "bulle" + str(room.bulle_id)
-                    if room.name.startswith("*") and not room.name.startswith("*" + chr(3)):
-                        data.append(["xx", room.name, room.getPlayerCount(), bulle if not room.isTribeHouse else "maison"])
-                    elif room.name.startswith(str(chr(3))) or room.name.startswith("*" + chr(3)):
-                        if room.name.startswith(("*" + chr(3))):
-                            data.append(["xx", room.name, room.getPlayerCount(), bulle if not room.isTribeHouse else "maison"])
-                        else:
-                            data.append(["*", room.name, room.getPlayerCount(), bulle if not room.isTribeHouse else "maison"])
-                    else:
-                        data.append([room.community, room.roomName, room.getPlayerCount(), bulle if not room.isTribeHouse else "maison"])
-                result = "<N>List of rooms:</N>"
-                for roomInfo in data:
-                    if roomInfo[3] == "maison":
-                        result += "\n<BL>%s</BL> <G>(%s / %s) :</G> <V>%s</V>" % (roomInfo[1] ,str.lower(roomInfo[0]), roomInfo[3], roomInfo[2])
-                    else:
-                        result += "\n<BL>%s-%s</BL> <G>(%s / %s) :</G> <V>%s</V>" % (str.lower(roomInfo[0]), roomInfo[1] ,str.lower(roomInfo[0]), roomInfo[3], roomInfo[2])
-                result += "\n<J>Total players:</J> <R>%s</R>" %(len(self.server.players))
-                self.client.sendLogMessage(result)
-            else:
-                roomName = self.argsNotSplited.split(" ", 0)[0] if (len(args) >= 1) else ""
-                totalusers = 0
-                users, rooms, message = 0, [], ""
-                for room in self.server.rooms.values():
-                    bulle = "bulle" + str(room.bulle_id)
-                    if room.name.find(roomName) != -1 or room.name.startswith(roomName):
-                        rooms.append([room.name, room.community, room.getPlayerCount(), bulle if not room.isTribeHouse else "maison"])
-                        
-                message += "<N>List of rooms matching [%s]:</N>" % (roomName)
-                for roomInfo in rooms:
-                    message += "\n"
-                    message += "<BL>%s <G>(%s / %s)</G> : <V>%s</V>" % (str.lower(roomInfo[0]), str.lower(roomInfo[1]), roomInfo[3], roomInfo[2])
-                    totalusers = totalusers + roomInfo[2]
-                message += "\n<J>Total players:</J> <R>%s</R>" % (totalusers)
-                self.client.sendLogMessage(message)
-
-                       
-
 # Modo Commands
         @self.command(level=8)
         async def clearchat(self):
@@ -1089,7 +1345,23 @@ class Commands:
             else:
                 self.client.playerException.Invoke("unknownuser")
 
-
+        @self.command(level=8, args=1)
+        async def removeplayerrecords(self, playerName):
+            t = self.server.fastRacingRecords
+            if playerName in t["records"]:
+                s = [playerName,len(t["records"][playerName])]
+                if s in t["sequentialrecords"]:
+                    index = t["sequentialrecords"].index(s)
+                    t["sequentialrecords"].pop(index)
+                for mapcode in t["records"][playerName]:
+                    if mapcode in t["recordmap"]:
+                        del t["recordmap"][mapcode]
+                del t["records"][playerName]
+                await self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ? where Player = ?", [0, "", 0, playerName])
+                self.client.sendServerMessageOthers(f"The records of {playerName} were removed by {self.client.playerName}.")
+                self.client.sendClientMessage(f"{playerName}'s records got removed.", 1)
+            else:
+                self.client.playerException.Invoke("norecordsfound")
 
 # Admin Commands
         @self.command(level=9, args=3)
@@ -1165,17 +1437,17 @@ class Commands:
             self.client.sendServerMessageAdminOthers(f"The database was updated by {self.client.playerName}.")
             self.client.sendClientMessage("The database got updated.", 1)
 
-
-
-        @self.command(alies=['removepermmap', 'harddel'], level=9, args=1)
-        async def removemap(self, mapCode=''):
-            if mapCode == '':
-                mapCode = self.client.room.mapCode
+        @self.command(level=9, args=1, alies=['removepermmap', 'harddel'])
+        async def removemap(self, mapCode):
             mapCode = mapCode.replace('@', '')
             await self.client.room.CursorMaps.execute("delete from Maps where Code = ?", [mapCode])
             self.client.sendClientMessage(f"Successfull deleted the map: @{mapCode} from database.", 1)
        
-        
+        @self.command(level=9)
+        async def smc(self, *args):
+            for room in self.server.rooms.values():
+                room.sendAll(Identifiers.send.Staff_Chat, ByteArray().writeByte(6).writeUTF(self.client.langue.lower() + " " + self.client.playerName).writeUTF(self.argsNotSplited).writeShort(0).writeByte(0).toByteArray())
+
 # Owner Commands
         @self.command(owner=True, args=1)
         async def clearlogs(self, type_log):
@@ -1236,7 +1508,7 @@ class Commands:
                     self.client.sendClientMessage("Successfull reloaded all modules.", 1)
                 except Exception as e:
                     self.client.sendClientMessage(f"Failed reload all modules. Error: {e}", 1)
-        
+
         @self.command(owner=True, alies=['deleterecords'])
         async def resetrecords(self):
             await self.client.room.CursorMaps.execute("update Maps set Time = ?, Player = ?, RecDate = ?", [0, "", 0])
@@ -1291,15 +1563,15 @@ class Commands:
                 self.client.sendLogMessage(message[:-1])
             else:
                 self.client.sendClientMessage("Available options are: cache, iptemp, debug, promotions, and shopoutfits.", 1)
-                               
+
 
 
 # Predefined Commands in swf.
-        @self.command(level=1, args=1) #############
+        @self.command(level=1, args=1)
         async def codecadeau(self, code):
             xd = None
             for i in self.server.gameCodes['codes']:
-                if code.upper() == i['name']:
+                if code.upper() == i['name'] and i['havegot'] == 0:
                     r1 = i['type']
                     r2 = i["amount"]
                     if r1 == "cheeses":
@@ -1314,65 +1586,24 @@ class Commands:
                         self.client.shopFraises += int(r2)
                         i['havegot'] = 1
                         break
-                        
-                        
-        ######################################
-                        
-        @self.command(level=7, args=1)
-        async def sonar(self, playerName, end=''):
+
+        @self.command(level=7)
+        async def sonar(self, playerName, end=''): ############
             player = self.server.players.get(playerName)
             if player:
                 self.client.sendPacket(Identifiers.send.Minibox_1, ByteArray().writeShort(200).writeUTF("Sonar "+playerName).writeUTF('\n'.join(self.server.sonar[playerName]) if playerName in self.server.sonar else "\n").toByteArray())
                 self.server.sonar[playerName] = []
                 if end == 'end':
-                    if not int(time.time() - self.lastsonar) > 2: 
+                    import time as _time
+                    if not int(_time.time() - self.lastsonar) > 2: 
                         self.currentArgsCount = 1
-                    self.lastsonar = time.time()
+                    self.lastsonar = _time.time()
                 if self.currentArgsCount == 1:
-                    player.sendPacket(Identifiers.send.Init_Sonar, ByteArray().writeInt(8).writeBoolean(True).writeShort(1).toByteArray())
+                    player.sendPacket(Identifiers.send.Init_Sonar, ByteArray().writeInt(player.playerCode).writeBoolean(True).writeShort(1).toByteArray())
                 else:
-                    player.sendPacket(Identifiers.send.End_Sonar, ByteArray().writeInt(8).toByteArray())
-                    
-
-                                
-        @self.command(level=7, arb=True, args=2)
-        async def iban(self, playerName, hours, *args):
-            result = self.server.checkBanUser(playerName)
-            if result == -1:
-                hours = int(args[1])
-                reason = argsNotSplited.split(" ", 0)[2]
-                if self.server.checkConnectedAccount(playerName):
-                    self.client.sendClientMessage(f"The player {playerName} got banned for {hours}h ({reason}).", 1)
-                    self.client.sendServerMessageOthers(f"{self.client.playerName} banned the player {playerName} for {hours}h ({reason}).")
-                    self.server.banPlayer(playerName, hours, reason, self.client.playerName, True)
-                else:
-                    self.client.sendClientMessage(f"The player {playerName} got banned for {hours}h ({reason}).", 1)
-                    self.client.sendServerMessageOthers(f"{self.client.playerName} offline banned the player {playerName} for {hours}h ({reason}).")
-                    self.server.banPlayer(playerName, hours, reason, self.client.playerName, True)
-            elif result == 1:
-                self.client.playerException.Invoke("useralreadybanned", playerName)
-            else:
-                self.client.playerException.Invoke("unknownuser")
-
-        @self.command(level=8, args=1)
-        async def arb(self, playerName):
-            player = self.server.players.get(playerName)
-            if player != None:
-                rs = self.Cursor['users'].find_one({'Username':player.playerName})
-                if rs != None:
-                    if rs['PrivLevel'] == 7:
-                        self.Cursor['users'].update_one({'Username':player.playerName},{'$set':{'PrivLevel': 1}})
-                        self.client.sendClientMessage(player.playerName+" is not arbitre / moderator anymore.", 1)
-                        player.room.removeClient(player)
-                        player.transport.close()
-                    else:
-                        self.Cursor['users'].update_one({'Username':player.playerName},{'$set':{'PrivLevel': 7}})
-                        self.client.sendClientMessage("New arbitre : "+player.playerName, 1)
-                        player.room.removeClient(player)
-                        player.transport.close()
+                    player.sendPacket(Identifiers.send.End_Sonar, ByteArray().writeInt(player.playerCode).toByteArray())
 
 
-            
     def FunCorpPlayerCommands(self):
         message = "FunCorp Commands: \n\n"
         message += "<J>/changesize</J> <V>[playerNames|*] [size|off]</V> : <BL> Temporarily changes the size (between 0.1x and 5x) of players.</BL>\n"
@@ -1386,22 +1617,22 @@ class Commands:
         
     def FunCorpMemberCommands(self):
         message = "FunCorp Commands: \n\n"
-        message += "<J>/changenick</J> <V>[playerName] [newNickname|off]</V> : <BL> Temporarily changes a player's nickname.</BL>\n"
+        #message += "<J>/changenick</J> <V>[playerName] [newNickname|off]</V> : <BL> Temporarily changes a player's nickname.</BL>\n"
         message += "<J>/changesize</J> <V>[playerNames|*] [size|off]</V> : <BL> Temporarily changes the size (between 0.1x and 5x) of players.</BL>\n"
-        #message += "<J>/closeroom</J> : <BL>Close the current room.</BL>\n"
-        message += "<J>/colormouse </J> <V>[playerNames|*] [color|off]</V> : <BL> Temporarily gives a colorized fur.</BL>\n"
-        message += "<J>/colornick</J> <V>[playerNames|*] [color|off]</V> : <BL> Temporarily changes the color of player nicknames.</BL>\n"
-        #message += "<J>/commu</J> <V>[code]</V> : <BL>Lets you change your community. Ex: /commu fr</BL>\n"
-        #message += "<J>/funcorp</J> <G>[on|off|help]</G> : <BL> Enable/disable the funcorp mode, or show the list of funcorp-related commands.</BL>\n"
-        #message += "<J>/ignore</J> <V>[playerPartName]<V> : <BL> Ignore selected player. (aliases: /negeer, /ignorieren)\n"
+        message += "<J>/closeroom</J> : <BL>Close the current room.</BL>\n"
+        #message += "<J>/colormouse </J> <V>[playerNames|*] [color|off]</V> : <BL> Temporarily gives a colorized fur.</BL>\n"
+        #message += "<J>/colornick</J> <V>[playerNames|*] [color|off]</V> : <BL> Temporarily changes the color of player nicknames.</BL>\n"
+        message += "<J>/commu</J> <V>[code]</V> : <BL>Lets you change your community. Ex: /commu fr</BL>\n"
+        message += "<J>/funcorp</J> <G>[on|off|help]</G> : <BL> Enable/disable the funcorp mode, or show the list of funcorp-related commands.</BL>\n"
+        message += "<J>/ignore</J> <V>[playerPartName]<V> : <BL> Ignore selected player. (aliases: /negeer, /ignorieren)\n"
         message += "<J>/linkmice</J> <V>[playerNames|*]</V> <G>[off]</G> : <BL> Temporarily links players.</BL>\n"
-        #message += "<J>/lsfc</J> : <BL> List of online funcorps.</BL>\n"
+        message += "<J>/lsfc</J> : <BL> List of online funcorps.</BL>\n"
         message += "<J>/meep</J> <V>[playerNames|*]</V> <G>[off]</G> : <BL> Give meep to players.</BL>\n"
-        #message += "<J>/profil</J> <V>[playerPartName]</V> : <BL> Display player's info. (aliases: /profile, /perfil, /profiel)</BL>\n"
-        #message += "<J>/room*</J> <V>[roomName]</V> : <BL> Allows you to entyer into any room. (aliases: /salon*, /sala*)</BL>\n"
-        #message += "<J>/roomevent</J> <G>[on|off]</G> : <BL> Highlights the current room in the room list.</BL>\n"
-        #message += "<J>/roomkick</J> <V>[playerName]</V> : <BL> Kicks a player from a room.</BL>\n"
+        message += "<J>/profil</J> <V>[playerPartName]</V> : <BL> Display player's info. (aliases: /profile, /perfil, /profiel)</BL>\n"
+        message += "<J>/room*</J> <V>[roomName]</V> : <BL> Allows you to entyer into any room. (aliases: /salon*, /sala*)</BL>\n"
+        message += "<J>/roomevent</J> <G>[on|off]</G> : <BL> Highlights the current room in the room list.</BL>\n"
+        message += "<J>/roomkick</J> <V>[playerName]</V> : <BL> Kicks a player from a room.</BL>\n"
         message += "<J>/transformation</J> <V>[playerNames|*]</V> <G>[off]</G> : <BL> Temporarily gives the ability to transform.</BL>\n"
-        #message += "<J>/tropplein</J> <V>[maxPlayers]</V> : <BL> Setting a limit for the number of players in a room.</BL>\n"
-        #message += "<J>/music</J> <V>[MP3_URL]</V> : <BL> Start playing music in the room.</BL>\n"
+        message += "<J>/tropplein</J> <V>[maxPlayers]</V> : <BL> Setting a limit for the number of players in a room.</BL>\n"
+        message += "<J>/music</J> <V>[MP3_URL]</V> : <BL> Start playing music in the room.</BL>\n"
         return message

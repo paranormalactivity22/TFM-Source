@@ -99,13 +99,16 @@ class Shop:
     def getShopItemPrice(self, fullItem):
         itemCat = (0 if fullItem // 10000 == 1 else fullItem // 10000) if fullItem > 9999 else fullItem // 100
         item = fullItem % 1000 if fullItem > 9999 else fullItem % 100 if fullItem > 999 else fullItem % (100 * itemCat) if fullItem > 99 else fullItem
-        item_idx = str(itemCat) + "|" + str(item)
-        if item_idx in self.server.shopListCheck:
-            return self.getItemPromotion(itemCat, item, self.server.shopListCheck[item_idx][1])
-        else:
-            if self.server.isDebug:
-                print(f"[INVALID] The item id {itemCat} in category {item} does not exist in the shop.")
-            return 0
+        return self.getItemPromotion(itemCat, item, self.server.shopListCheck[str(itemCat) + "|" + str(item)][1])
+        #itemCat = (0 if fullItem // 10000 == 1 else fullItem // 10000) if fullItem > 9999 else fullItem // 100
+        #item = fullItem % 1000 if fullItem > 9999 else fullItem % 100 if fullItem > 999 else fullItem % (100 * itemCat) if fullItem > 99 else fullItem
+        #item_idx = str(itemCat) + "|" + str(item)
+        #if item_idx in self.server.shopListCheck:
+        #    return self.getItemPromotion(itemCat, item, self.server.shopListCheck[item_idx][1])
+        #else:
+        #    if self.server.isDebug:
+        #        print(f"[INVALID] The item id {itemCat} in category {item} does not exist in the shop.")
+        #    return 0
                 
     def getShamanShopItemPrice(self, fullItem):
         return self.server.shamanShopListCheck[str(fullItem)][1]
@@ -113,7 +116,8 @@ class Shop:
     def getItemPromotion(self, itemCat, item, price):
         for promotion in self.server.shopPromotions:
             if promotion[0] == itemCat and promotion[1] == item:
-                return price - int(promotion[2] / 100.0 * price)
+                return int(promotion[2] // 100.0 * price)
+                #return price - int(promotion[2] / 100.0 * price)
         return price
 
     def sendShopList(self):
@@ -140,9 +144,9 @@ class Shop:
         shop = self.server.shopList if sendItems else []
         packet.writeInt(len(shop))
         for item in shop:
-            packet.writeShort(item["category"]).writeShort(item["id"]).writeByte(item["customs"]).writeBoolean(item["new"]).writeBoolean("purchasable" in item).writeInt(item["cheese"]).writeInt(item["fraise"]).writeBoolean(item["collector"] if 'collector' in item else False)
-            if (item["collector"] if 'collector' in item else False):
-                packet.writeInt(22)
+            packet.writeShort(item["category"]).writeShort(item["id"]).writeByte(item["customs"]).writeBoolean(item["new"]).writeBoolean("purchasable" in item).writeInt(item["cheese"]).writeInt(item["fraise"]).writeBoolean(0) #item["collector"] if 'collector' in item else False
+            #if (item["collector"] if 'collector' in item else False):
+            #    packet.writeInt(22)
 
         looks = {}
         if sendItems:

@@ -16,8 +16,6 @@ class Tribulle:
         self.client = player
         self.server = player.server
         self.Cursor = player.Cursor
-        self.apiCursor = player.Cursor
-        self.last_time = 0
 
         self.TRIBE_RANKS = "0|${trad#TG_0}|0;0|${trad#TG_1}|0;2|${trad#TG_2}|0;3|${trad#TG_3}|0;4|${trad#TG_4}|32;5|${trad#TG_5}|160;6|${trad#TG_6}|416;7|${trad#TG_7}|932;8|${trad#TG_8}|2044;9|${trad#TG_9}|2046"
 
@@ -25,7 +23,7 @@ class Tribulle:
         return int(_time.time() // 60)
 
     def sendPacket(self, code, result):
-        self.client.sendPacket([60, 3], ByteArray().writeShort(code).writeBytes(result).toByteArray())
+        self.client.sendPacket(Identifiers.send.Tribulle, ByteArray().writeShort(code).writeBytes(result).toByteArray())
 
     def sendPacketToPlayer(self, playerName, code, result):
         player = self.server.players.get(playerName)
@@ -52,83 +50,81 @@ class Tribulle:
                 player.tribeRanks = self.client.tribeRanks
 
     def parseTribulleCode(self, code, packet):
-        if (_time.time() - self.last_time) >= 3:
-            if code == 28:
-                self.sendFriendsList(packet)
-            elif code == 30:
-                self.closeFriendsList(packet)
-            elif code == 18:
-                self.addFriend(packet)
-            elif code == 20:
-                self.removeFriend(packet)
-            elif code == 46:
-                self.sendIgnoredsList(packet)
-            elif code == 42:
-                self.ignorePlayer(packet)
-            elif code == 44:
-                self.removeIgnore(packet)
-            elif code == 52:
-                self.whisperMessage(packet)
-            elif code == 60:
-                self.disableWhispers(packet)
-            elif code == 10:
-                self.changeGender(packet)
-            elif code == 22:
-                self.marriageInvite(packet)
-            elif code == 24:
-                self.marriageAnswer(packet)
-            elif code == 26:
-                self.marriageDivorce(packet)
-            elif code == 108:
-                self.sendTribeInfo(packet)
-            elif code == 84:
-                self.createTribe(packet)
-            elif code == 78:
-                self.tribeInvite(packet)
-            elif code == 80:
-                self.tribeInviteAnswer(packet)
-            elif code == 98:
-                self.changeTribeMessage(packet)
-            elif code == 102:
-                self.server.loop.create_task(self.changeTribeCode(packet))
-            elif code == 110:
-                self.closeTribe(packet)
-            elif code == 118:
-                self.createNewTribeRank(packet)
-            elif code == 120:
-                self.deleteTribeRank(packet)
-            elif code == 116:
-                self.renameTribeRank(packet)
-            elif code == 122:
-                self.changeRankPosition(packet)
-            elif code == 114:
-                self.setRankPermition(packet)
-            elif code == 112:
-                self.changeTribePlayerRank(packet)
-            elif code == 132:
-                self.showTribeHistorique(packet)
-            elif code == 82:
-                self.leaveTribe(packet)
-            elif code == 104:
-                self.kickPlayerTribe(packet)
-            elif code == 126:
-                self.setTribeMaster(packet)
-            elif code == 128:
-                self.finishTribe(packet)
-            elif code == 54:
-                self.customChat(packet)
-            elif code == 56:
-                self.leaveChat(packet)
-            elif code == 48:
-                self.chatMessage(packet)
-            elif code == 58:
-                self.chatMembersList(packet)
-            elif code == 50:
-                self.sendTribeChatMessage(packet)
-            else:
-                if self.server.isDebug:
-                    print("[%s] [WARN][%s] Invalid tribulle code -> Code: %s packet: %s" %(_time.strftime("%H:%M:%S"), self.client.playerName, code, repr(packet.toByteArray())))
-            self.last_time = _time.time()
+        if code == 28:
+            self.sendFriendsList(packet)
+        elif code == 30:
+            self.closeFriendsList(packet)
+        elif code == 18:
+            self.addFriend(packet)
+        elif code == 20:
+            self.removeFriend(packet)
+        elif code == 46:
+            self.sendIgnoredsList(packet)
+        elif code == 42:
+            self.ignorePlayer(packet)
+        elif code == 44:
+            self.removeIgnore(packet)
+        elif code == 52:
+            self.whisperMessage(packet)
+        elif code == 60:
+            self.disableWhispers(packet)
+        elif code == 10:
+            self.changeGender(packet)
+        elif code == 22:
+            self.marriageInvite(packet)
+        elif code == 24:
+            self.marriageAnswer(packet)
+        elif code == 26:
+            self.marriageDivorce(packet)
+        elif code == 108:
+            self.sendTribeInfo(packet)
+        elif code == 84:
+            self.createTribe(packet)
+        elif code == 78:
+            self.tribeInvite(packet)
+        elif code == 80:
+            self.tribeInviteAnswer(packet)
+        elif code == 98:
+            self.changeTribeMessage(packet)
+        elif code == 102:
+            self.server.loop.create_task(self.changeTribeCode(packet))
+        elif code == 110:
+            self.closeTribe(packet)
+        elif code == 118:
+            self.createNewTribeRank(packet)
+        elif code == 120:
+            self.deleteTribeRank(packet)
+        elif code == 116:
+            self.renameTribeRank(packet)
+        elif code == 122:
+            self.changeRankPosition(packet)
+        elif code == 114:
+            self.setRankPermition(packet)
+        elif code == 112:
+            self.changeTribePlayerRank(packet)
+        elif code == 132:
+            self.showTribeHistorique(packet)
+        elif code == 82:
+            self.leaveTribe(packet)
+        elif code == 104:
+            self.kickPlayerTribe(packet)
+        elif code == 126:
+            self.setTribeMaster(packet)
+        elif code == 128:
+            self.finishTribe(packet)
+        elif code == 54:
+            self.customChat(packet)
+        elif code == 56:
+            self.leaveChat(packet)
+        elif code == 48:
+            self.chatMessage(packet)
+        elif code == 58:
+            self.chatMembersList(packet)
+        elif code == 50:
+            self.sendTribeChatMessage(packet)
+        else:
+            if self.server.isDebug:
+                print("[%s] [WARN][%s] Invalid tribulle code -> Code: %s packet: %s" %(_time.strftime("%H:%M:%S"), self.client.playerName, code, repr(packet.toByteArray())))
 
     def platformAuthentication(self, status):
         self.client.sendPacket(Identifiers.send.New_Tribulle, ByteArray().writeBoolean(status).toByteArray())
@@ -209,6 +205,7 @@ class Tribulle:
         self.client.sendPacket([60, 3], p.toByteArray())
         if not readPacket == None and not self.client.marriage == "":
             self.sendPacket(15 if readPacket == "0" else 29, ByteArray().writeInt(self.client.tribulleID+1).writeByte(1).toByteArray())
+
     def closeFriendsList(self, readPacket):
         self.client.openingFriendList = False
         self.sendPacket(31, ByteArray().writeBytes(readPacket.toByteArray()).writeByte(1).toByteArray())
@@ -513,7 +510,6 @@ class Tribulle:
             packet.writeInt(4)
             packet.writeUTF(player.roomName if player != None else "")
 
-
     def sendTribeInfo(self, readPacket=""):
         if not readPacket == "":
             tribulleID, connected = readPacket.readInt(), readPacket.readByte()
@@ -597,18 +593,14 @@ class Tribulle:
         self.sendPacket(166, ByteArray().writeInt(0).writeInt(self.client.playerID).writeInt(self.client.playerID).writeInt(self.getInGenderMarriage(self.client.playerName)).writeInt(self.server.getPlayerID(self.client.marriage) if not self.client.marriage == "" else 0).writeUTF(self.client.marriage).toByteArray())
 
     def createTribe(self, readPacket):
-        tribulleID, tribeName = readPacket.readInt(), readPacket.readUTF()
         if self.client.tribeCode != 0: return
-        #self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
+        tribulleID, tribeName = readPacket.readInt(), readPacket.readUTF()
 
         if tribeName == "" or not re.match("^[ a-zA-Z0-9]*$", tribeName) or "<" in tribeName or ">" in tribeName:
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(8).toByteArray())
-            #self.client.sendMessage("You can't use html codes!")
         elif self.checkExistingTribe(tribeName):
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(9).toByteArray())
-            #self.client.sendMessage("The tirbe aleardy exixst!")
         elif self.client.shopCheeses < 500:
-            #self.client.sendMessage("You not have cheese!")
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(14).toByteArray())
         else:
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())

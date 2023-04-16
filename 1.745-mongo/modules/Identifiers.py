@@ -262,6 +262,7 @@ class Identifiers:
         Send_gift = (28, 16)
         Computer_Info = (28, 17)
         Change_Shaman_Color = (28, 18)
+        Check_Command_Tab = (28, 48)
 
         Lua_Script = (29, 1)
         Key_Board = (29, 2)
@@ -413,7 +414,6 @@ class Identifiers:
         Anim_Donation = [8, 50]
         Vampire_Mode = [8, 66]
         Adventures = [8, 70]
-        # [8, 70]
         
         Tribe_Invite = [16, 2]
         Banner_Login = [16, 9]
@@ -479,7 +479,7 @@ class Identifiers:
         Take_Cheese = [28, 41]
         Log_Message = [28, 46]
         Enter_Command = [28, 48]
-        Request_Info = [28, 50]
+        #Request_Info = [28, 50]
         Queue_popup = [28, 61]
         Server_Restart = [28, 88]
         

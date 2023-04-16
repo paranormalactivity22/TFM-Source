@@ -18,7 +18,7 @@ class Packets:
         self.data = {}
         self.packets = {}
         self.Cursor = player.Cursor
-        self.isOpenedHelpCommand = False
+        self.lastOpenedCommands = _time.time()
         self.__init_2()
         
     def packet(self,func=None,args=[]):
@@ -141,7 +141,7 @@ class Packets:
                 bodyDef["height"] = height
                 self.client.room.addPhysicObject(-1, posX, posY, bodyDef)
 
-        @self.packet(args=['readInt','readInt','readInt']) #####################
+        @self.packet(args=['readInt','readInt','readInt'])
         async def Bulle(self, bulle_id, timestamp, playerID):
             playerName = self.client.server.getPlayerName(playerID)
             if timestamp != int(_time.time() / 100): return self.client.transport.close()
@@ -177,8 +177,8 @@ class Packets:
             if roundCode == self.client.room.lastRoundCode and (self.client.room.currentMap == -1 or monde == self.client.room.currentMap or self.client.room.EMapCode != 0):
                 await self.client.playerWin(holeType, distance)
 
-        @self.packet(args=['readInt', 'readShort', 'readShort', 'readShort'])
-        async def Get_Cheese(self, roundCode, cheeseX, cheeseY, distance):
+        @self.packet(args=['readInt', 'readShort', 'readShort', 'readShort', 'readShort'])
+        async def Get_Cheese(self, roundCode, cheeseX, cheeseY, x, distance):
             if roundCode == self.client.room.lastRoundCode:
                 self.client.sendGiveCheese(distance)
 
@@ -276,7 +276,6 @@ class Packets:
                         roomName = self.server.checkRoom(roomName, self.client.langue)
                     roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
                     if roomEnter == None or self.client.privLevel >= 7:
-                        self.client.sendBulle(roomName)
                         self.client.enterRoom(roomName)
                         if self.packet.bytesAvailable():
                             roomEnter = self.server.rooms.get(roomName if roomName.startswith("*") or roomName.startswith("@") else ("%s-%s" %(self.client.langue, roomName)))
@@ -703,7 +702,7 @@ class Packets:
                     self.client.canLogin[3] = True
                     self.Cursor['users'].insert_one({"Username":playerName,"Password":password,"PlayerID":self.server.lastPlayerID,"PrivLevel":1,"TitleNumber":0,"FirstCount":0,"CheeseCount":0,"ShamanCheeses":0,"ShopCheeses":self.server.initialCheeses,"ShopFraises":self.server.initialFraises,"ShamanSaves":0,"ShamanSavesNoSkill":0,"HardModeSaves":0,"HardModeSavesNoSkill":0,"DivineModeSaves":0,"DivineModeSavesNoSkill":0,"BootcampCount":0,"ShamanType":0,"ShopItems":"","ShamanItems":"","Clothes":"","Look":"1;0,0,0,0,0,0,0,0,0,0,0","ShamanLook":"0,0,0,0,0,0,0,0,0,0","MouseColor":"78583a","ShamanColor":"95d9d6","RegDate":Utils.getTime(),"Badges":"","CheeseTitleList":"","FirstTitleList":"","ShamanTitleList":"","ShopTitleList":"","BootcampTitleList":"","HardModeTitleList":"","DivineModeTitleList":"","SpecialTitleList":"","BanHours":0,"ShamanLevel":0,"ShamanExp":0,"ShamanExpNext":0,"Skills":"","LastOn":32,"FriendsList":"","IgnoredsList":"","Gender":0,"LastDivorceTimer":0,"Marriage":"","TribeCode":0,"TribeRank":0,"TribeJoined":0,"Gifts":"","Messages":"","SurvivorStats":"0,0,0,0","RacingStats":"0,0,0,0","DefilanteStats":"0,0,0","Consumables":"","EquipedConsumables":"","Pet":0,"PetEnd":0,"Fur":0,"FurEnd":0,"ShamanBadges":"","EquipedShamanBadge":0,"totemitemcount":0,"totem":"","VisuDone":"","customitems":"","langue":self.client.langue,"AventureCounts":"","AventurePoints":"24:0","AventureSaves":0,"user_community":self.client.computerLanguage,"avatar":"0.jpg","Email":email,"Letters":"","Time":0,"Karma":0,"Roles":"{}"})
                     await self.client.loginPlayer(playerName, password, "\x03[Tutorial] %s" %(playerName))
-                    self.client.sendServerMessage("The ip %s created account <V>%s</V>. (<J>%s</J>)." %(self.client.ipAddress, playerName, self.client.langue))
+                    self.client.sendServerMessage("The ip %s created account <V>%s</V>. (<J>%s</J>)." %(Utils.EncodeIP(self.client.ipAddress), playerName, self.client.roomName))
             else:
                 self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(5).writeByte(0).writeByte(0).writeUTF(playerName).toByteArray())
 
@@ -774,7 +773,7 @@ class Packets:
                 options.append(self.packet.readUTF())
             p = ByteArray()
             p.writeInt(0).writeUTF("").writeBoolean(False).writeUTF(description)
-            for result in results:
+            for result in options:
                 p.writeUTF(result)
             
             for player in self.server.players.copy().values():
@@ -906,10 +905,18 @@ class Packets:
             color = packet.readInt()
             self.client.shamanColor = "%06X" %(0xFFFFFF & color)
 
+        @self.packet(args=['readUTF'])
+        async def Check_Command_Tab(self, command):
+            if (_time.time() - self.lastOpenedCommands) < 3:
+                return
+            if command == "" and self.client.privLevel >= 7:
+                self.client.sendLogMessage(self.client.sendModerationCommands())
+            self.lastOpenedCommands = _time.time()
+
         @self.packet
         async def Lua_Script(self): #################
             script = self.packet.readUTFBytes(int.from_bytes(self.packet.read(3),'big')).decode()
-            if True:
+            if False:
             #if(self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp) or self.server.isDebug:
                 if not self.client.isLuaAdmin:
                     if self.client.room.luaRuntime == None:
@@ -1316,7 +1323,6 @@ class Packets:
                         if tr < 11: data.writeEncoded(tr).writeUTF(i).writeEncoded(sldt[i]).writeEncoded(tr)
                         if i == self.client.playerName: sltdat[str2] = [tr, sldt[i]]
                         tr+=1
-            
             for str2 in ["CheeseCount","FirstCount","ShamanCheeses","RacingStats","BootcampCount","SurvivorStats","DefilanteStats"]: data.writeEncoded(sltdat[str2][1]).writeEncoded(sltdat[str2][0])
             self.client.sendPacket(Identifiers.send.Ranking, data.toByteArray())
 
