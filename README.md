@@ -24,4 +24,4 @@ pip install configparser
 ![image](https://user-images.githubusercontent.com/69107484/208734884-be5aa9e8-130d-43a2-8ef0-edb4d668bd14.png)
 ![image](https://user-images.githubusercontent.com/69107484/215431252-565219fd-4515-4d0b-9cf3-4183855ed063.png)
 
-# Support Server --> https://discord.gg/VstRmzC3ea
+# Support Server --> https://discord.gg/DE5QwCZ7
