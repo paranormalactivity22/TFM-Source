@@ -2,14 +2,14 @@
 - This is transformice server made in python 3. Works perfectly on 3.5 ~ 3.9.7 versios.
 Transformice is 2010 french flash-game written in AS3 (Action script 3), where purpose is to get cheese and enter in the hole. The game sources were so popular at 2016-2018 year. Latest game source was made by me, (Version : 1.696) Thanks to lucas about game swf. ~~The project is discontinued.~~
 
-# How to run the server? (XAMPP )
+# How to run the server? (XAMPP, OLDADED, UNSUPPORTED)
 - Video Tutorial: https://youtube.com/watch?v=pjvjAnE1Mmc
 - As I mention you need python 3, and several modules: pymysql, configparser, twisted, lupa, zope.interface, zlib, ast.
 - You need also place where to store the database, I use xampp (mysql - localhost/phpmyadmin).  If you get MySQL error, disable the strict mode (sql_mode=NO_ENGINE_SUBSTITUTION).
 - After you create db and install all modules, press Controller.py file.
 - After that you can create an account or login on it. If you get error about base.py file (which is possible), contact me at discord -> Paranormal Activity#6083
 
-# How to run the server? (MONGODB)
+# How to run the server? (MONGODB, SUPPORTED)
 - You need windows 10 and x64 based.
 - Video Tutorial: https://www.youtube.com/watch?v=x151jtMicXk
 - As I mention you need python 3, and several modules: colorconsole, pymongo, aiosqlite, lupa, configparser, requests
@@ -28,5 +28,5 @@ https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-6.0.5-signed.msi (Mong
 ![image](https://user-images.githubusercontent.com/69107484/215431252-565219fd-4515-4d0b-9cf3-4183855ed063.png)
 
 # Support
-Discord Server --> https://discord.gg/DE5QwCZ7
+Discord Server --> https://discord.gg/MZZ2mSG9Km 
 My Discord --> Paranormal Activity#9399
