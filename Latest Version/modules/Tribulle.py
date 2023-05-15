@@ -151,6 +151,7 @@ class Tribulle:
         friendsList = self.client.friendsList.copy()
         for friend in friendsList:
             player = self.server.players.get(friend)
+                
             if player != None:
                 infos[friend] = [player.playerID, ",".join(player.friendsList), player.marriage, player.gender, player.lastOn]
                 isFriend = self.client.playerName in player.friendsList
@@ -161,7 +162,7 @@ class Tribulle:
                 friendsList.remove(friend)
 
         for name in friendsList:
-            for rs in self.Cursor['users'].find({'Username':name}):
+            for rs in self.Cursor['users'].find({'Username':self.server.getPlayerName(int(name))}):
                 infos[rs['Username']] = [rs['PlayerID'], rs['FriendsList'], rs['Marriage'], rs['Gender'], rs['LastOn']]
                 isFriend = self.client.playerID in map(int, filter(None, rs['FriendsList'].split(",")))
                 if isFriend:
@@ -243,7 +244,6 @@ class Tribulle:
         packet = ByteArray()
         id = self.server.getPlayerID(playerName)
         player = self.server.players.get(playerName)
-
         if playerName in self.client.friendsList:
             packet.writeInt(id)
             self.client.friendsList.remove(playerName)
@@ -520,9 +520,7 @@ class Tribulle:
             self.sendPacket(109, ByteArray().writeInt(self.client.tribulleID).writeByte(17).toByteArray())
             return
 
-        print(self.client.tribeCode)
         members = self.getTribeMembers(self.client.tribeCode)
-        print(members)
         packet = ByteArray()
         packet.writeInt(self.client.tribeCode)
         packet.writeUTF(self.client.tribeName)
@@ -533,7 +531,6 @@ class Tribulle:
         isOffline = []
         infos = {}
         for member in members:
-            print(member)
             rs = self.Cursor['users'].find_one({'Username':member})
             infos[member] = [rs['PlayerID'], rs['Gender'], rs['LastOn'], rs['TribeRank'], rs['TribeJoined']]
             isOffline.append(member)
@@ -608,6 +605,7 @@ class Tribulle:
         else:
             self.sendPacket(85, ByteArray().writeInt(tribulleID).writeByte(1).toByteArray())
             createTime = self.getTime()
+            self.Cursor['game_config'].update_one({'lastTribeID':self.server.lastTribeID},{'$set':{'lastTribeID':self.server.lastTribeID + 1}})
             self.server.lastTribeID += 1
             self.Cursor['tribe'].insert_one({'Code':self.server.lastTribeID, 'Name': tribeName, 'Message': '', 'House': 0, 'Ranks': self.TRIBE_RANKS, 'Historique': '', 'Members': str(self.client.playerID), 'Chat': 0, 'Points': 0, 'createTime': createTime})
             self.client.shopCheeses -= 500

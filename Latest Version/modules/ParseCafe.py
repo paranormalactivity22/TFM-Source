@@ -39,6 +39,8 @@ class Cafe:
                 self.chec = rs["PostID"]
             elif rs["Status"] < 2:
                 packet.writeInt(rs["PostID"]).writeInt(self.server.getPlayerID(rs["Name"])).writeInt(Utils.getSecondsDiff(rs["Date"])).writeUTF(rs["Name"]).writeUTF(rs["Post"]).writeBoolean(str(self.client.playerCode) not in rs["Votes"].split(",")).writeShort(rs["Points"]).writeUTF("").writeByte(rs["Status"])
+        
+        self.Cursor['game_config'].update_one({'lastCafeTopicID':self.server.lastCafeTopicID},{'$set':{'lastCafeTopicID':topicID}})
         self.server.lastCafeTopicID = topicID
         if not cafe:
             await self.client.CursorCafe.execute("delete from cafetopics where TopicID = ?", [topicID])
@@ -142,7 +144,7 @@ class Cafe:
         self.chec = 0
         
     async def sendWarnings(self):
-        if self.checkPerm() == True:
+        if self.isGuest:
             return
         await self.client.CursorCafe.execute("select * from cafeposts where status = 2 and name = ? order by postid asc", [self.client.playerName])
         self.client.sendPacket(Identifiers.send.Send_Cafe_Warnings, ByteArray().writeShort(len(await self.client.CursorCafe.fetchall())).toByteArray())

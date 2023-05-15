@@ -474,6 +474,7 @@ class Shop:
                 if (player.Shop.checkInShamanShop(fullItem) if isShamanItem else player.Shop.checkInShop(fullItem)):
                     self.sendShopGiftPacket(2, playerName)
                 else:
+                    self.Cursor['game_config'].update_one({'lastShopGiftID':self.server.lastShopGiftID},{'$set':{'lastShopGiftID':self.server.lastShopGiftID + 1}})
                     self.server.lastShopGiftID += 1
                     player.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(self.client.playerName).writeUTF(self.client.playerLook).writeBoolean(isShamanItem).writeInt(fullItem).writeUTF(message).writeBoolean(False).toByteArray())
                     self.sendShopGiftPacket(0, playerName)
@@ -526,6 +527,7 @@ class Shop:
         for gift in self.client.shopGifts.split("/"):
             if not gift == "":
                 values = binascii.unhexlify(gift.encode()).decode().split("|", 4)
+                self.Cursor['game_config'].update_one({'lastShopGiftID':self.server.lastShopGiftID},{'$set':{'lastShopGiftID':self.server.lastShopGiftID + 1}})
                 self.server.lastShopGiftID += 1
                 self.client.sendPacket(Identifiers.send.Shop_Gift, ByteArray().writeInt(self.server.lastShopGiftID).writeUTF(self.client.playerName).writeUTF(values[1]).writeBoolean(bool(values[1])).writeInt(int(values[3])).writeUTF(values[4] if len(values) > 4 or values[4] != '' else "").writeBoolean(False).toByteArray())
                 self.server.shopGifts[self.server.lastShopGiftID] = [values[0], bool(values[2]), int(values[3])]

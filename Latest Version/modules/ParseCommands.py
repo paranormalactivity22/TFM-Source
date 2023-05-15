@@ -422,6 +422,39 @@ class Commands:
 
 
 # Funcorp Commands
+        @self.command(level=5, fc=True)
+        async def changenick(self, *args):
+            if not self.client.privLevel in [5, 9] and not self.client.isFunCorpPlayer:
+                return
+        
+            if self.client.room.isFuncorp:
+                dump = []
+                msgpl = []
+                for arg in args:
+                    dump.append(arg)
+                if dump[-1] == "off":
+                    for argument in dump[:-1]:
+                        player = self.client.room.clients.get(argument)
+                        if player != None:
+                            msgpl.append(player.playerName)
+                            player.mouseName = ""
+                    if len(msgpl) > 0:
+                        self.client.sendClientMessage(f"The following players has changed their nicknames to default: <BV>{', '.join(map(str, msgpl))}</BV>", 1)
+                else:
+                    ppnickname = []
+                    for argument in dump:
+                        player = self.client.room.clients.get(argument)
+                        if player != None:
+                            msgpl.append(player)
+                        else:
+                            ppnickname.append(argument)
+                    for player in msgpl:
+                        player.mouseName = ' '.join(map(str, ppnickname))
+                    if len(msgpl) > 0:
+                        self.client.sendClientMessage(f"The following players has changed their nicknames to {' '.join(map(str, ppnickname))} : <BV>{','.join(map(str, msgpl))}</BV>", 1)
+            else:
+                self.client.playerException.Invoke("requireFC")
+
         @self.command(level=5, fc=True, roomStrm=True)
         async def changesize(self, *args):
             if not self.client.privLevel in [5, 9] and not self.client.isFunCorpPlayer and not self.client.room.roomName == "*strm_" + self.client.playerName:
@@ -1732,6 +1765,12 @@ class Commands:
                 else:
                     player.sendPacket(Identifiers.send.End_Sonar, ByteArray().writeInt(player.playerCode).toByteArray())
 
+
+        @self.command(level=1)
+        async def test(self):
+            self.client.sendPacket([28, 41], ByteArray().writeShort(2).toByteArray())
+
+
     def FunCorpPlayerCommands(self):
         message = "FunCorp Commands: \n\n"
         message += "<J>/changesize</J> <V>[playerNames|*] [size|off]</V> : <BL> Temporarily changes the size (between 0.1x and 5x) of players.</BL>\n"
@@ -1745,7 +1784,7 @@ class Commands:
         
     def FunCorpMemberCommands(self):
         message = "FunCorp Commands: \n\n"
-        #message += "<J>/changenick</J> <V>[playerName] [newNickname|off]</V> : <BL> Temporarily changes a player's nickname.</BL>\n"
+        message += "<J>/changenick</J> <V>[playerName] [newNickname|off]</V> : <BL> Temporarily changes a player's nickname.</BL>\n"
         message += "<J>/changesize</J> <V>[playerNames|*] [size|off]</V> : <BL> Temporarily changes the size (between 0.1x and 5x) of players.</BL>\n"
         message += "<J>/closeroom</J> : <BL>Close the current room.</BL>\n"
         #message += "<J>/colormouse </J> <V>[playerNames|*] [color|off]</V> : <BL> Temporarily gives a colorized fur.</BL>\n"

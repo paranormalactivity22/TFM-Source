@@ -1,5 +1,5 @@
 #coding: utf-8
-import re, json, random, urllib.request, time as _time, struct, asyncio, binascii, base64, zlib
+import re, json, random, urllib.request, time as _time, struct, asyncio, binascii, base64, zlib, uuid, hashlib
 
 loop = asyncio.get_event_loop()
 
@@ -38,7 +38,7 @@ class Packets:
                 args.append(self.value)
             await self.packets[ccc][1](self, *args)
             
-            if (self.packet.bytesAvailable()):
+            if (self.packet.bytesAvailable()) and self.server.isDebug:
                 print("[%s] Struct Error - C: %s - CC: %s - packet: %s" %(self.client.playerName, C, CC, repr(packet.toByteArray())))
                 
         else:
@@ -567,12 +567,8 @@ class Packets:
             self.client.Shop.equipItem(_id)
 
         @self.packet(args=['readInt', 'readBoolean'])
-        async def Equip_Item(self, _id, status):
-            self.client.Shop.buyItem(_id, status)
-
-        @self.packet(args=['readInt', 'readBoolean'])
         async def Buy_Item(self, _id, status):
-           self.client.Shop.buyItem(_id, status)
+            self.client.Shop.buyItem(_id, status)
 
         @self.packet(args=['readInt', 'readBoolean'])
         async def Buy_Custom(self, _id, status):
@@ -617,7 +613,7 @@ class Packets:
             self.client.Shop.customShamanItem(fullItem, customs)
 
         @self.packet(args=['readUTF', 'readBoolean', 'readInt', 'readUTF'])
-        async def Send_gift1(self, playerName, isShamanItem, fullItem, message):
+        async def Send_gift(self, playerName, isShamanItem, fullItem, message):
             self.client.Shop.sendShopGift(playerName, isShamanItem, fullItem, message)
 
         @self.packet(args=['readInt', 'readBoolean', 'readUTF', 'readBoolean'])
@@ -691,7 +687,7 @@ class Packets:
                 self.client.modoPwet.openChatLog(playerName)
 
         @self.packet(args=['readUTF', 'readUTF', 'readUTF', 'readUTF'])
-        async def Create_Account(self, playerName, password, email, captcha): ####################
+        async def Create_Account(self, playerName, password, email, captcha):
             if self.client.checkTimeAccount() or self.server.isDebug:
                 if self.server.checkExistingUser(playerName):
                     self.client.sendPacket(Identifiers.send.Login_Result, ByteArray().writeByte(3).writeUTF(playerName).writeUTF("").toByteArray())
@@ -703,7 +699,7 @@ class Packets:
                     tag = "".join([str(random.choice(range(9))) for x in range(4)])
                     playerName += "#" + tag
                     self.client.sendAccountTime()
-                    #self.Cursor['game_config'].update_one({'lastPlayerID':self.server.lastPlayerID},{'$set':{'lastPlayerID':self.server.lastPlayerID + 1}})
+                    self.Cursor['game_config'].update_one({'lastPlayerID':self.server.lastPlayerID},{'$set':{'lastPlayerID':self.server.lastPlayerID + 1}})
                     self.server.lastPlayerID += 1
                     self.client.canLogin[2] = True
                     self.client.canLogin[3] = True
@@ -818,9 +814,9 @@ class Packets:
             self.client.lastGameMode = mode
             self.client.sendGameMode(mode)
 
-        #@self.packet
-        #async def Request_Info(self): ####################
-            #self.client.sendPacket(Identifiers.send.Tribulle_Token, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray())
+        @self.packet
+        async def Request_Info(self):
+            self.client.sendPacket(Identifiers.send.Request_Info, ByteArray().writeUTF("http://localhost/tfm/info.php").toByteArray())
 
         @self.packet(args=['readShort'])
         async def Transformation_Object(self, objectID):
@@ -896,10 +892,6 @@ class Packets:
                     else:
                         self.client.sendLangueMessage("", "$Joueur_Existe_Pas")
 
-        @self.packet
-        async def Send_gift(self):
-            self.client.sendPacket(Identifiers.send.Send_gift, ByteArray().writeByte(1).toByteArray())
-
         @self.packet(args=['readUTF', 'readUTF', 'readUTF'])
         async def Computer_Info(self, info, os_type, os_version):
             self.client.computerLanguage = info
@@ -909,7 +901,6 @@ class Packets:
 
         @self.packet(args=['readInt'])
         async def Change_Shaman_Color(self, color):
-            color = packet.readInt()
             self.client.shamanColor = "%06X" %(0xFFFFFF & color)
 
         @self.packet(args=['readUTF'])
@@ -921,10 +912,9 @@ class Packets:
                 self.lastOpenedCommands = _time.time()
 
         @self.packet
-        async def Lua_Script(self): #################
+        async def Lua_Script(self):
             script = self.packet.readUTFBytes(int.from_bytes(self.packet.read(3),'big')).decode()
-            if False:
-            #if(self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp) or self.server.isDebug:
+            if(self.client.privLevel in [9, 4] or self.client.isLuaCrew) or ((self.client.privLevel == 5 or self.client.isFunCorpPlayer) and self.room.isFuncorp) or self.server.isDebug:
                 if not self.client.isLuaAdmin:
                     if self.client.room.luaRuntime == None:
                         self.client.room.luaRuntime = Lua(self.client.room, self.server)
@@ -942,18 +932,18 @@ class Packets:
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("Keyboard", (self.client.playerName, key, down, posX, posY, xPlayerVelocity, yPlayerVelocity))
 
-        @self.packet(args=['readShort', 'readShort']) #################
+        @self.packet(args=['readShort', 'readShort'])
         async def Mouse_Click(self, posX, posY):                 
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("Mouse", (self.client.playerName, posX, posY))
 
-        @self.packet(args=['readInt', 'readUTF']) #################
+        @self.packet(args=['readInt', 'readUTF'])
         async def Popup_Answer(self, popupID, answer):
             if self.client.room.luaRuntime != None:
                 self.client.room.luaRuntime.emit("PopupAnswer", (popupID, self.client.playerName, answer))
 
         @self.packet(args=['readInt', 'readUTF'])
-        async def Text_Area_Callback(self, textAreaID, event): #################
+        async def Text_Area_Callback(self, textAreaID, event):
             if event in ["lbileri","lbgeri","lbkapat"]:
                 self.client.lbSayfaDegis(event=="lbileri", event=="lbkapat")
                 return 
@@ -1378,7 +1368,7 @@ class Packets:
                 self.client.room.forceNextShamanSTRM = -1
             return
 
-        @self.packet(args=['readByte', 'readBoolean']) #################
+        @self.packet(args=['readByte', 'readBoolean'])
         async def Purchase_Emojies(self, emoji_id, fraises):
             shopEmojies = self.server.shopEmojies
             amount = 0
@@ -1391,7 +1381,53 @@ class Packets:
                 self.client.shopCheeses -= amount
             self.client.sendPacket(Identifiers.send.Emoji_panel, ByteArray().writeEncoded(1).writeByte(emoji_id).toByteArray())
             self.client.shopEmojies += str(emoji_id) + ","
+            self.client.Shop.sendItemBuy(emoji_id)
+            self.client.Shop.sendShopList(True)
+            self.client.missions.upMission('6')
+            
+            
+        @self.packet(args=['readByte'])
+        async def Buy_Fraises(self, isSteam):
+            if not isSteam:
+                r1 = self.server.shopPurchaseInfo["Paypal"]
+                p = ByteArray().writeByte(len(r1))
+                for i in r1:
+                    p.writeInt(i["ID"]).writeShort(i["fraises"]).writeInt(i["amount"]).writeUTF(i["Currency"])
+                self.client.sendPacket(Identifiers.send.Purchase_Menu, p.toByteArray())
+            else:
+                p = ByteArray()
+                r1 = self.server.shopPurchaseInfo["Steam"]
+                for i in r1:
+                    p.writeByte(i["ID"]).writeInt(i["amount"]).writeShort(i["fraises"]).writeShort(i["unknown1"]).writeShort(i["unknown2"]).writeUTF(i["Currency"])
+                self.client.sendPacket(Identifiers.send.Steam_Purchase_Menu, p.toByteArray())
+                        
+        @self.packet(args=['readByte','readByte','readByte','readByte'])
+        async def Purchase_Fraises(self, r1, r2, r3, optionId):
+            token = hashlib.md5(str(uuid.uuid4()).encode()).hexdigest()
+            self.client.sendPacket(Identifiers.send.Payment_in_progress_popup, ByteArray().writeUTF(f"https://www.paypal.com/webscr?cmd=express-checkout&useraction=commit&token={token}").writeUTF(f"send_purchase_{token}_{optionId}").toByteArray())
 
+        @self.packet(args=['readByte'])
+        async def Purchase_Fraises_Steam(self, optionID):
+            return
+
+        @self.packet
+        async def Purchase_Fraises_allpass(self):
+            return
+            
+        @self.packet
+        async def Purchase_Fraises_G2APAY(self):
+            return
+            
+        @self.packet
+        async def Purchase_Fraises_primeiroPay(self):
+            return
+            
+        @self.packet(args=['readUTF'])
+        async def Cancel_Transaction(self, optionName):
+            if optionName.startswith("send_purchase_"):
+                pass
+            return
+            
         #[144, 19] 
         #    return
             
@@ -1527,6 +1563,7 @@ class Packets:
                         code = self.client.room.EMapLoaded
                         await self.client.room.CursorMaps.execute("update Maps set XML = ?, Updated = ? where Code = ?", [self.client.room.EMapXML, Utils.getTime(), code])
                     else:
+                        self.Cursor['game_config'].update_one({'lastMapEditeurCode':self.server.lastMapEditeurCode},{'$set':{'lastMapEditeurCode':self.server.lastMapEditeurCode + 1}})
                         self.server.lastMapEditeurCode += 1
                         code = self.server.lastMapEditeurCode
                         await self.client.room.CursorMaps.execute("insert into Maps (Code, Name, XML, YesVotes, NoVotes, Perma, Del) values (?, ?, ?, ?, ?, ?, ?)", [code, self.client.playerName, self.client.room.EMapXML, 0, 0, 22 if isTribeHouse else 0, 0])

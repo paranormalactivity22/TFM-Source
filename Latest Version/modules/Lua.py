@@ -1044,11 +1044,11 @@ class Lua:
         if self.CheckPerms("tfm.exec.setRoomPassword"):
             self.room.roomDetails[10] = password if len(password) > 0 else ""
 
-    def setShaman(self, target, makeAShaman=True):
+    def setShaman(self, target, type_sha=0, makeAShaman=True):
         player = self.room.clients.get(Utils.parsePlayerName(target))
         if player != None:
             player.isShaman = True
-            self.room.sendAll(Identifiers.send.New_Shaman, ByteArray().writeInt(player.playerCode).writeByte(player.shamanType).writeShort(player.shamanLevel).writeShort(player.Skills.getShamanBadge()).toByteArray())
+            self.room.sendAll(Identifiers.send.New_Shaman, ByteArray().writeInt(player.playerCode).writeByte(type_sha).writeShort(player.shamanLevel).writeShort(player.Skills.getShamanBadge()).writeBoolean(makeAShaman).writeInt(69).toByteArray())
 
     def setVampirePlayer(self, playerName, status=True):
         player = self.room.clients.get(Utils.parsePlayerName(playerName))

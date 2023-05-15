@@ -204,10 +204,13 @@ class Identifiers:
         Player_Vampire = (8, 66)
         Player_Calendar = (8, 70)
         
-        inGamePurchase = (12, 1)
+        Purchase_Fraises = (12, 1)
         Cancel_Transaction = (12, 3)
-        PayPal = (12, 10)
-        inSteamPurchase = (12, 12)
+        Buy_Fraises = (12, 10)
+        Purchase_Fraises_allpass = (12, 11)
+        Purchase_Fraises_Steam = (12, 12)
+        Purchase_Fraises_G2APAY = (12, 15)
+        Purchase_Fraises_primeiroPay = (12, 16)
         
         Tribe_House = (16, 1)
         Tribe_Invite = (16, 2)
@@ -226,7 +229,7 @@ class Identifiers:
         Buy_Shaman_Custom = (20, 25)
         Custom_Shaman_Item = (20, 26)
         Buy_Full_Look_Confirm = (20, 27)
-        Send_gift1 = (20, 28)
+        Send_gift = (20, 28)
         Gift_result = (20, 29)
 			
         Modopwet = (25, 2)
@@ -259,7 +262,6 @@ class Identifiers:
         Player_Ping = (28, 6)
         Change_Shaman_Type = (28, 10)
         Letter = (28, 15)
-        Send_gift = (28, 16)
         Computer_Info = (28, 17)
         Change_Shaman_Color = (28, 18)
         Check_Command_Tab = (28, 48)
@@ -334,17 +336,17 @@ class Identifiers:
     class send:
         Sync = [4, 3]
         Player_Movement = [4, 4]
-        Move_Object = [4, 7]
         Player_Position = [4, 6]
+        Move_Object = [4, 7]
         Remove_Object = [4, 8]
         Crouch = [4, 9]
         Shaman_Position = [4, 10]
-        # [4, 8], [4, 2]
 		
         Rounds_Count = [5, 1]
         New_Map = [5, 2]
         Shaman_Message = [5, 9]
         Map_Start_Timer = [5, 10]
+        Spawn_Item = [5, 12]
         Convert_Skill = [5, 13]
         Skill_Object = [5, 14]
         Demolition_Skill = [5, 15]
@@ -400,14 +402,17 @@ class Identifiers:
         Enable_Skill = [8, 10]
         Shaman_Info = [8, 11]
         New_Shaman = [8, 12]
+        SpeechBubbles = [8, 13]
         Titles_List = [8, 14]
         Shaman_Fly = [8, 15]
         Profile = [8, 16]
         Meep_IMG = [8, 18]
-        Remove_Cheese = [8, 19]
+        #Remove_Cheese = [8, 19]
         Shop_List = [8, 20]
+        New_Shaman_Without_Items = [8, 21]
         Shaman_Skills = [8, 22]
         NPC = [8, 30]
+        Start_Position = [8, 37]
         Meep = [8, 38]
         Can_Meep = [8, 39]
         Unlocked_Badge = [8, 42]
@@ -417,26 +422,38 @@ class Identifiers:
         Vampire_Mode = [8, 66]
         Adventures = [8, 70]
         
+        Payment_in_progress_popup = [12, 2]
+        Transaction_error_popup = [12, 3]
+        Transaction_error_popup2 = [12, 9]
+        Purchase_Menu = [12, 12]
+        allpass_Purchase_Menu = [12, 13]
+        Kongregate_Purchase_Menu = [12, 14]
+        G2APAY_Purchase_Menu = [12, 16]
+        primeiroPay_Purchase_Menu = [12, 17]
+        Purchase_Fraises_Completed_Popup = [12, 20]
+        Error_Occured_Popup = [12, 60]
+        
+        Hide_Room_Details = [14, 1]
+        Hide_Room_Details2 = [14, 2]
+        
         Tribe_Invite = [16, 2]
         Banner_Login = [16, 9]
-        # [16, 10]
         
         Item_Buy = [20, 2]
         Promotion = [20, 3]
         Undefined = [20, 4]
         Shop_Info = [20, 15]
         Look_Change = [20, 17]
+        New_Hat_Available_Message = [20, 20]
         Shaman_Look = [20, 24]
         Shaman_Items = [20, 27]
         Gift_result = [20, 29]
         Shop_Gift = [20, 30]
-        Shop_Gift_Message = [20, 31]
         
         Shaman_Earned_Exp = [24, 1]
         Shaman_Earned_Level = [24, 2]
         Redistribute_Error_Time = [24, 3]
         Redistribute_Error_Cheeses = [24, 4]
-        # [24, 5]
         
         Modopwet_Open = [25, 2]
         Modopwet_Banned = [25, 5]
@@ -451,13 +468,13 @@ class Identifiers:
         Gain_Give = [26, 1]
         Player_Identification = [26, 2]
         Correct_Version = [26, 3]
+        Player_Lifes = [26, 4]
         Attack = [26, 9]
         Player_Damanged = [26, 11]
         Login_Result = [26, 12]
         Player_FPS = [26, 13]
         Survey = [26, 16]
         Survey_Answer = [26, 17]
-        
         Captcha = [26, 20]
         Player_MS = [26, 25]
         Player_Info = [26, 28]
@@ -476,16 +493,18 @@ class Identifiers:
         Ping = [28, 6]
         Shaman_Type = [28, 10]
         Totem_Item_Count = [28, 11]
-        Send_gift = [28, 12]
+        Account_Link_Successfull = [28, 12]
         Letter = [28, 15]
+        Account_Link_Error_Popup = [28, 30]
         Take_Cheese = [28, 41]
         Log_Message = [28, 46]
         Enter_Command = [28, 48]
-        #Request_Info = [28, 50]
+        Request_Info = [28, 50]
         Queue_popup = [28, 61]
+        TextBox_Popup = [28, 60]
+        Verify_Email_Popup = [28, 64]
         Server_Restart = [28, 88]
         
-
         # Lua
         Lua_Minigame = [29, 1]
         Bind_Key_Board = [29, 2]
@@ -509,6 +528,7 @@ class Identifiers:
         Show_Color_Picker = [29, 32]
         Lua_Disable = [29, 33]
         
+        # Mulodrome and Cafe
         Mulodrome_Result = [30, 4]
         Mulodrome_End = [30, 13]
         Mulodrome_Start = [30, 14]
@@ -521,6 +541,7 @@ class Identifiers:
         Cafe_New_Post = [30, 44]
         Delete_Cafe_Message = [30, 47]
         
+        # Inventory and Trade
         Inventory = [31, 1]
         Update_Inventory_Consumable = [31, 2]
         Use_Inventory_Consumable = [31, 3]
@@ -531,9 +552,10 @@ class Identifiers:
         Trade_Confirm = [31, 9]
         Trade_Close = [31, 10]
 
+        # Bulle
         Bulle = [44, 1]
-        Bulle_ID = [44, 22]
         
+        # Tribulle
         Old_Tribulle = [60, 1]
         Tribulle = [60, 3]
         Switch_Tribulle = [60, 4]
@@ -553,6 +575,7 @@ class Identifiers:
         Pet = [100, 70]
         Balloon_Badge = [100, 71]
         Change_Title = [100, 72]
+        Steam_Purchase_Menu = [100, 90]
         Image_Login = [100, 99]
 
 
@@ -573,7 +596,7 @@ class Identifiers:
         AttachPlayer = [144, 20]
         UnAttachPlayer = [144, 21]
         Open_Outfits = [144, 22]
-        NPC_Emote = [144, 23] # bruh
+        NPC_Emote = [144, 23]
         Background_color = [144, 25]
         Score_Fur_vs_Fur = [144, 26]
         Limit_Shaman_Item = [144, 28]
@@ -587,17 +610,17 @@ class Identifiers:
         #Play_Sound = [144, 38]
         Emoji_panel = [144, 44]
         
-        # new new packets
-        
+        # New new packets
         Init_Sonar = [145, 174]
         End_Sonar = [145, 181]
         
-        # language
+        # Login packets #2
         Set_Language = [176, 5]
         Language_List = [176, 6]
         Verify_Code = [176, 7]
         Community_Partners = [176, 8]
         Open_Link = [176, 9]
+        
 
     class old:
         class recv:
