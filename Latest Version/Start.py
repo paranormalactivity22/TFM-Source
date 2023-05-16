@@ -814,7 +814,6 @@ class Client:
             timeCalc = Utils.getHoursDiff(banInfo[1])
             if timeCalc <= 0:
                 self.server.removeTempBan(playerName)
-                self.showTakeCheesePopup = True
             else:
                 self.sendPacket(Identifiers.old.send.Player_Ban_Login, [timeCalc, banInfo[0]])
                 return
@@ -2364,7 +2363,8 @@ class Server(asyncio.Transport):
         if player != None:
             if modname == "Server":
                 self.sendServerMessage(f"The player {playerName} was banned for {bantime} hour(s). Reason: Vote Populaire.")
-            player.banHours += bantime # <--
+            player.banHours += bantime
+            player.showTakeCheesePopup = True
             Cursor['users'].update_one({'Username':playerName},{'$set':{'BanHours':player.banHours}})
             
             if player.banHours <= 360:
